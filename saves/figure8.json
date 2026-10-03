@@ -1,0 +1,130 @@
+{
+  "schema": 1,
+  "root": {
+    "index": 0,
+    "def": "curve_r40_l45",
+    "pose": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "heading_rad": 0.0
+    }
+  },
+  "pieces": [
+    {
+      "index": 1,
+      "def": "curve_r40_l45",
+      "parent": 0,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 2,
+      "def": "curve_r40_l45",
+      "parent": 1,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 3,
+      "def": "curve_r40_l45",
+      "parent": 2,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 4,
+      "def": "curve_r40_l45",
+      "parent": 3,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 5,
+      "def": "curve_r40_l45",
+      "parent": 4,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 6,
+      "def": "curve_r40_l45",
+      "parent": 5,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 7,
+      "def": "curve_r40_l45",
+      "parent": 6,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 8,
+      "def": "curve_r40_r45",
+      "parent": 7,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 9,
+      "def": "curve_r40_r45",
+      "parent": 8,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 10,
+      "def": "curve_r40_r45",
+      "parent": 9,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 11,
+      "def": "curve_r40_r45",
+      "parent": 10,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 12,
+      "def": "curve_r40_r45",
+      "parent": 11,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 13,
+      "def": "curve_r40_r45",
+      "parent": 12,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 14,
+      "def": "curve_r40_r45",
+      "parent": 13,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 15,
+      "def": "curve_r40_r45",
+      "parent": 14,
+      "parent_port": "b",
+      "my_port": "a"
+    }
+  ],
+  "seams": [
+    [
+      0,
+      "a",
+      15,
+      "b"
+    ]
+  ],
+  "switches": {},
+  "next_index": 16
+}

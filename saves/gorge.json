@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "root": {
+    "index": 0,
+    "def": "curve_r40_l90",
+    "pose": {
+      "x": 160.0,
+      "y": 0.0,
+      "z": -39.99999999999996,
+      "heading_rad": 0.0
+    }
+  },
+  "pieces": [
+    {
+      "index": 1,
+      "def": "curve_r40_l90",
+      "parent": 0,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 2,
+      "def": "straight_40",
+      "parent": 1,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 3,
+      "def": "ramp_up_40",
+      "parent": 2,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 4,
+      "def": "ramp_up_40",
+      "parent": 3,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 5,
+      "def": "bridge_40",
+      "parent": 4,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 6,
+      "def": "ramp_down_40",
+      "parent": 5,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 7,
+      "def": "ramp_down_40",
+      "parent": 6,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 8,
+      "def": "straight_40",
+      "parent": 7,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 9,
+      "def": "straight_40",
+      "parent": 8,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 10,
+      "def": "curve_r40_l90",
+      "parent": 9,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 11,
+      "def": "curve_r40_l90",
+      "parent": 10,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 12,
+      "def": "straight_40",
+      "parent": 11,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 13,
+      "def": "straight_40",
+      "parent": 12,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 14,
+      "def": "straight_40",
+      "parent": 13,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 15,
+      "def": "ramp_up_40",
+      "parent": 14,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 16,
+      "def": "ramp_up_40",
+      "parent": 15,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 17,
+      "def": "bridge_40",
+      "parent": 16,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 18,
+      "def": "ramp_down_40",
+      "parent": 17,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 19,
+      "def": "ramp_down_40",
+      "parent": 18,
+      "parent_port": "b",
+      "my_port": "a"
+    }
+  ],
+  "seams": [
+    [
+      0,
+      "a",
+      19,
+      "b"
+    ]
+  ],
+  "switches": {},
+  "next_index": 20,
+  "scenery": "gorge",
+  "title": "河谷大桥"
+}

@@ -1,0 +1,293 @@
+{
+  "schema": 2,
+  "roots": [
+    {
+      "index": 2,
+      "def": "straight_40",
+      "pose": {
+        "x": 44.36869193675014,
+        "y": 0.0,
+        "z": 96.84584905794998,
+        "heading_rad": 3.141592653589793
+      }
+    }
+  ],
+  "pieces": [
+    {
+      "index": 3,
+      "def": "straight_40",
+      "parent": 2,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 4,
+      "def": "straight_40",
+      "parent": 3,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 5,
+      "def": "curve_r40_l90",
+      "parent": 4,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 6,
+      "def": "crossing_90",
+      "parent": 5,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 7,
+      "def": "straight_40",
+      "parent": 6,
+      "parent_port": "c",
+      "my_port": "a"
+    },
+    {
+      "index": 8,
+      "def": "curve_r40_l90",
+      "parent": 7,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 9,
+      "def": "curve_r40_l90",
+      "parent": 8,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 11,
+      "def": "straight_20",
+      "parent": 9,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 12,
+      "def": "curve_r40_l90",
+      "parent": 11,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 13,
+      "def": "straight_20",
+      "parent": 12,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 14,
+      "def": "curve_r40_l90",
+      "parent": 6,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 15,
+      "def": "ramp_up_40",
+      "parent": 14,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 16,
+      "def": "ramp_up_40",
+      "parent": 15,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 18,
+      "def": "bridge_40",
+      "parent": 16,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 19,
+      "def": "ramp_down_40",
+      "parent": 18,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 20,
+      "def": "curve_r40_l90",
+      "parent": 19,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 21,
+      "def": "ramp_up_40",
+      "parent": 20,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 22,
+      "def": "ramp_up_40",
+      "parent": 21,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 23,
+      "def": "ramp_up_40",
+      "parent": 22,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 24,
+      "def": "bridge_80",
+      "parent": 23,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 25,
+      "def": "curve_r40_l90",
+      "parent": 24,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 26,
+      "def": "curve_r40_l90",
+      "parent": 25,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 27,
+      "def": "curve_r40_r90",
+      "parent": 26,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 28,
+      "def": "bridge_80",
+      "parent": 27,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 29,
+      "def": "bridge_80",
+      "parent": 28,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 30,
+      "def": "bridge_40",
+      "parent": 29,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 31,
+      "def": "curve_r40_r90",
+      "parent": 30,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 32,
+      "def": "ramp_down_40",
+      "parent": 31,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 33,
+      "def": "ramp_down_40",
+      "parent": 32,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 34,
+      "def": "curve_r40_r90",
+      "parent": 33,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 35,
+      "def": "ramp_down_40",
+      "parent": 34,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 36,
+      "def": "ramp_down_40",
+      "parent": 35,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 37,
+      "def": "curve_r40_r90",
+      "parent": 36,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 38,
+      "def": "curve_r40_r90",
+      "parent": 37,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 39,
+      "def": "straight_20",
+      "parent": 38,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 40,
+      "def": "curve_r40_l90",
+      "parent": 39,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 41,
+      "def": "straight_20",
+      "parent": 40,
+      "parent_port": "b",
+      "my_port": "a"
+    }
+  ],
+  "seams": [
+    [
+      6,
+      "d",
+      13,
+      "b"
+    ],
+    [
+      2,
+      "a",
+      41,
+      "b"
+    ]
+  ],
+  "switches": {},
+  "next_index": 42,
+  "saved_from": "track_editor"
+}

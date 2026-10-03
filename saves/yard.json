@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "root": {
+    "index": 0,
+    "def": "straight_40",
+    "pose": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "heading_rad": 0.0
+    }
+  },
+  "pieces": [
+    {
+      "index": 1,
+      "def": "turnout_l_40",
+      "parent": 0,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 2,
+      "def": "straight_20",
+      "parent": 1,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 3,
+      "def": "curve_r40_l45",
+      "parent": 1,
+      "parent_port": "c",
+      "my_port": "a"
+    },
+    {
+      "index": 4,
+      "def": "straight_10",
+      "parent": 3,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 5,
+      "def": "turnout_r_40",
+      "parent": 0,
+      "parent_port": "a",
+      "my_port": "a"
+    },
+    {
+      "index": 6,
+      "def": "straight_20",
+      "parent": 5,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 7,
+      "def": "crossing_45",
+      "parent": 5,
+      "parent_port": "c",
+      "my_port": "a"
+    },
+    {
+      "index": 8,
+      "def": "straight_20",
+      "parent": 7,
+      "parent_port": "c",
+      "my_port": "a"
+    }
+  ],
+  "seams": [],
+  "switches": {},
+  "next_index": 9
+}

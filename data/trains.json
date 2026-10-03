@@ -1,0 +1,301 @@
+{
+  "schema": 2,
+  "notes": [
+    "长度与几何按沙盘缩尺（概要设计 §5.8 的 SCALE_MODEL ≈ 0.4）；质量与功率保持**真实值**。",
+    "这样做的理由：动力学是沿轨道的一维问题，只与 v / 牵引 / 阻力 / 质量 / 坡度有关，与视觉尺度无关。",
+    "保留真实质量与功率，才能让「绿皮车起步慢、复兴号起步快」这个差别真正体现出来；若把质量也按体积缩到 0.064 倍，加速时间会变得毫无参考意义。",
+    "davis = [a, b, c]，含义是**单位质量的阻力**（m/s²）：r(v) = a + b*v + c*v^2，v 单位 m/s。",
+    "adhesion 是黏着系数；可达牵引力上限 = adhesion * (所有动力车质量) * g —— 这正是「动力集中」与「动力分散」的差别所在。",
+
+    "—— 制动（schema 2 起拆成两档）——",
+    "max_brake_force_n 是**常用制动**的峰值；max_emergency_brake_force_n 是**紧急制动**的峰值（不写就退回常用值）。",
+    "  两者要除以整列车质量才是可比的减速度（TrainSpec.brake_deceleration）：常用约 0.85~1.0 m/s²，紧急约 2.4 m/s²。",
+    "  为什么必须拆开：紧急制动是保命的，它得**明显地**比「把制动位推到底」更狠。若两档一样大，",
+    "  Shift+空格 与 ↓ 拉到底就是同一件事，用户按下去只会觉得「没反应」。",
+    "  紧急取 2.4 m/s² 是贴着黏着线定的（0.25*g ≈ 2.45）—— 制动这一侧没有做黏着极限约束，所以这个数不能凭手感随便往上加。",
+
+    "—— shape：车体外观几何（schema 2 新增，每个车型必填）——",
+    "profile 是**半断面**：从底面中线 (0, 地板高) 起、到顶面中线 (0, 车顶高) 止的一串 [横向, 高度]。",
+    "  只写一半是因为车体左右对称——写一半再镜像，就没有「左边比右边宽 3 mm」这种数据错误的可能。",
+    "  约束（构建期会查）：中段横向坐标必须为正、高度必须单调不降。这两条一起保证镜像后的闭合轮廓不自交。",
+    "  半宽 / 地板高 / 车高都不另写数据，它们是断面的推论（CarShape.half_width 等）。",
+    "  高度一律以**轨面**为 0（轨面就是列车走行面，见 render/style.py 的 RAIL_TOP_Y = 0）。",
+    "横断面取真实值的约 0.9 倍（全宽 2.8 m、车高 3.6 m）而不是 0.4 倍：轨距 1.435 m 是**不缩尺**的，",
+    "  横断面若也缩到 0.4 倍（全宽 1.24 m）就会比轨道还窄，车会「悬在钢轨里」。代价是车看起来比真实短粗，",
+    "  这个代价由「R = 40 m 的弯道」这一设定决定，概要设计 §5.8 已经接受（半径/车长 ≈ 4:1 正是 N 比例模型铁路的手感）。",
+
+    "nose = 头部收敛段：scale(u) = end_scale + (1 - end_scale) * (u / length) ** power，u 是**距车端面**的距离。",
+    "  power 小 → 断面一上来就张开，端部钝圆（客车端部的倒角）；power 大 → 长时间保持很细再张开，端部尖长（CRH380A）。",
+    "  end_scale 是端面本身还剩多少缩放。真实车头不是数学意义上的一个点，留一点端面反而更像铸出来的鼻锥。",
+    "  pivot_height 是缩放的**支点高度**：断面关于这条水平线收缩，于是鼻尖自然落在支点附近而不是被拉到车顶或车底——",
+    "  这就是动车组「低伏前伸」的来源（顶线与底线同时向腰线收拢）。",
+    "  ends = 'both' 两端同型；ends = 'forward' 只有 +x 端是头型、另一端是平的贯通端。",
+    "  CRH380A/CR400AF 的头车都是 'forward'：编组时**最后一节要镜像**，才能让列车两端各有一个头型。",
+
+    "windows / doors / stripe 是沿车体高度与长度的一维区间，纵向位置一律由代码算出来（CarSpec.window_bands / door_bands）：",
+    "  windows 只给「几扇、多宽、中心距多大」，具体摆在哪由窗口在「鼻锥与车门之间剩下的连续空档」里居中排。",
+    "  于是「窗切进了门里」「窗户放不下」这类错误在构建期就抛错，而不是等到出图才发现。",
+    "  doors 每端一扇，从车端往车内退 inset（有鼻锥的那一端会再整体让开鼻锥的长度）。",
+    "  stripe 是车身色带占据的高度区间，颜色来自 livery.band。色带与车窗在高度上不允许重叠——",
+    "  两者都是车身表面的区域，重叠会让涂装出现二义的边界。"
+  ],
+  "car_types": {
+    "df4b_loco": {
+      "name": "东风4B 内燃机车",
+      "length": 8.2,
+      "bogie_half_spacing": 2.2,
+      "mass_kg": 138000,
+      "powered": true,
+      "roof_gear": "fans",
+      "livery": { "body": "#2F5D3A", "band": "#E8C84A", "roof": "#7D8279" },
+      "shape": {
+        "profile": [
+          [0.00, 1.05],
+          [1.05, 1.05],
+          [1.30, 1.24],
+          [1.32, 1.55],
+          [1.32, 2.95],
+          [1.24, 3.16],
+          [0.92, 3.30],
+          [0.00, 3.36]
+        ],
+        "nose": { "length": 0.26, "end_scale": 0.94, "power": 1.0, "pivot_height": 2.20, "ends": "both" },
+        "windows": { "y": [1.95, 2.60], "count": 6, "width": 0.58, "pitch": 0.98 },
+        "stripe": [1.30, 1.70]
+      }
+    },
+    "coach_25b": {
+      "name": "25B 型客车（绿皮）",
+      "length": 10.2,
+      "bogie_half_spacing": 3.6,
+      "mass_kg": 55000,
+      "powered": false,
+      "roof_gear": "fans",
+      "livery": { "body": "#2E6B3E", "band": "#E8C84A", "roof": "#8A8F87" },
+      "shape": {
+        "profile": [
+          [0.00, 1.05],
+          [1.10, 1.05],
+          [1.38, 1.28],
+          [1.40, 1.70],
+          [1.40, 3.08],
+          [1.30, 3.38],
+          [0.96, 3.56],
+          [0.00, 3.62]
+        ],
+        "nose": { "length": 0.34, "end_scale": 0.955, "power": 1.0, "pivot_height": 2.35, "ends": "both" },
+        "windows": { "y": [1.98, 2.62], "count": 7, "width": 0.75, "pitch": 1.02 },
+        "doors": { "y": [1.05, 2.62], "per_end": 1, "width": 0.62, "inset": 0.55 },
+        "stripe": [1.30, 1.68]
+      }
+    },
+    "coach_25g_ac": {
+      "name": "25G 型空调客车",
+      "length": 10.2,
+      "bogie_half_spacing": 3.6,
+      "mass_kg": 57000,
+      "powered": false,
+      "roof_gear": "ac",
+      "livery": { "body": "#8C2E2E", "band": "#E8E4D8", "roof": "#8A8F87" },
+      "shape": {
+        "profile": [
+          [0.00, 1.05],
+          [1.10, 1.05],
+          [1.38, 1.28],
+          [1.40, 1.70],
+          [1.40, 3.08],
+          [1.30, 3.38],
+          [0.96, 3.56],
+          [0.00, 3.62]
+        ],
+        "nose": { "length": 0.34, "end_scale": 0.955, "power": 1.0, "pivot_height": 2.35, "ends": "both" },
+        "windows": { "y": [1.98, 2.62], "count": 7, "width": 0.75, "pitch": 1.02 },
+        "doors": { "y": [1.05, 2.62], "per_end": 1, "width": 0.62, "inset": 0.55 },
+        "stripe": [1.30, 1.68]
+      }
+    },
+    "crh380a_end": {
+      "name": "CRH380A 头车",
+      "length": 10.0,
+      "bogie_half_spacing": 3.5,
+      "mass_kg": 47500,
+      "powered": true,
+      "roof_gear": "ac",
+      "livery": { "body": "#F2F4F6", "band": "#1F5FA8", "roof": "#C9CED3" },
+      "shape": {
+        "profile": [
+          [0.00, 1.00],
+          [0.98, 1.00],
+          [1.28, 1.18],
+          [1.40, 1.62],
+          [1.41, 2.34],
+          [1.37, 2.90],
+          [1.24, 3.28],
+          [0.96, 3.50],
+          [0.00, 3.60]
+        ],
+        "nose": { "length": 2.30, "end_scale": 0.10, "power": 1.70, "pivot_height": 1.62, "ends": "forward" },
+        "windows": { "y": [2.05, 2.80], "count": 5, "width": 0.90, "pitch": 1.05 },
+        "doors": { "y": [1.00, 2.80], "per_end": 1, "width": 0.60, "inset": 0.50 },
+        "stripe": [1.55, 1.98]
+      }
+    },
+    "crh380a_mid": {
+      "name": "CRH380A 中间车",
+      "length": 10.0,
+      "bogie_half_spacing": 3.5,
+      "mass_kg": 48000,
+      "powered": true,
+      "roof_gear": "pantograph",
+      "livery": { "body": "#F2F4F6", "band": "#1F5FA8", "roof": "#C9CED3" },
+      "shape": {
+        "profile": [
+          [0.00, 1.00],
+          [0.98, 1.00],
+          [1.28, 1.18],
+          [1.40, 1.62],
+          [1.41, 2.34],
+          [1.37, 2.90],
+          [1.24, 3.28],
+          [0.96, 3.50],
+          [0.00, 3.60]
+        ],
+        "nose": { "length": 0.18, "end_scale": 0.97, "power": 1.0, "pivot_height": 2.10, "ends": "both" },
+        "windows": { "y": [2.05, 2.80], "count": 6, "width": 0.95, "pitch": 1.24 },
+        "doors": { "y": [1.00, 2.80], "per_end": 1, "width": 0.60, "inset": 0.50 },
+        "stripe": [1.55, 1.98]
+      }
+    },
+    "cr400af_end": {
+      "name": "CR400AF 头车",
+      "length": 10.0,
+      "bogie_half_spacing": 3.5,
+      "mass_kg": 45500,
+      "powered": true,
+      "roof_gear": "ac",
+      "livery": { "body": "#F7F8F9", "band": "#C0392B", "roof": "#BFC5CA" },
+      "shape": {
+        "profile": [
+          [0.00, 1.00],
+          [1.00, 1.00],
+          [1.30, 1.20],
+          [1.40, 1.66],
+          [1.40, 2.44],
+          [1.34, 2.96],
+          [1.20, 3.30],
+          [0.92, 3.50],
+          [0.00, 3.58]
+        ],
+        "nose": { "length": 1.55, "end_scale": 0.13, "power": 1.05, "pivot_height": 1.55, "ends": "forward" },
+        "windows": { "y": [2.00, 2.78], "count": 6, "width": 0.88, "pitch": 0.98 },
+        "doors": { "y": [1.00, 2.78], "per_end": 1, "width": 0.62, "inset": 0.52 },
+        "stripe": [1.50, 1.95]
+      }
+    },
+    "cr400af_mid": {
+      "name": "CR400AF 中间车",
+      "length": 10.0,
+      "bogie_half_spacing": 3.5,
+      "mass_kg": 46000,
+      "powered": true,
+      "roof_gear": "pantograph",
+      "livery": { "body": "#F7F8F9", "band": "#C0392B", "roof": "#BFC5CA" },
+      "shape": {
+        "profile": [
+          [0.00, 1.00],
+          [1.00, 1.00],
+          [1.30, 1.20],
+          [1.40, 1.66],
+          [1.40, 2.44],
+          [1.34, 2.96],
+          [1.20, 3.30],
+          [0.92, 3.50],
+          [0.00, 3.58]
+        ],
+        "nose": { "length": 0.18, "end_scale": 0.97, "power": 1.0, "pivot_height": 2.10, "ends": "both" },
+        "windows": { "y": [2.00, 2.78], "count": 6, "width": 0.92, "pitch": 1.22 },
+        "doors": { "y": [1.00, 2.78], "per_end": 1, "width": 0.62, "inset": 0.52 },
+        "stripe": [1.50, 1.95]
+      }
+    }
+  },
+  "trains": [
+    {
+      "id": "green_skin_10",
+      "name": "老式绿皮车 · 机车 + 10 辆",
+      "coupling_gap": 0.3,
+      "power_w": 1985000,
+      "max_tractive_force_n": 300000,
+      "max_brake_force_n": 584800,
+      "max_emergency_brake_force_n": 1651200,
+      "adhesion": 0.25,
+      "davis": [0.015, 1.5e-4, 2.0e-5],
+      "max_speed_kmh": 100,
+      "formation": [["df4b_loco", 1], ["coach_25b", 10]]
+    },
+    {
+      "id": "green_skin_16",
+      "name": "老式绿皮车 · 机车 + 16 辆",
+      "coupling_gap": 0.3,
+      "power_w": 1985000,
+      "max_tractive_force_n": 300000,
+      "max_brake_force_n": 865300,
+      "max_emergency_brake_force_n": 2443200,
+      "adhesion": 0.25,
+      "davis": [0.015, 1.5e-4, 2.0e-5],
+      "max_speed_kmh": 100,
+      "formation": [["df4b_loco", 1], ["coach_25b", 16]]
+    },
+    {
+      "id": "crh380a_8",
+      "name": "和谐号 CRH380A · 8 辆编组",
+      "coupling_gap": 0.25,
+      "power_w": 9600000,
+      "max_tractive_force_n": 250000,
+      "max_brake_force_n": 383000,
+      "max_emergency_brake_force_n": 919200,
+      "adhesion": 0.25,
+      "davis": [0.010, 1.1e-4, 1.4e-5],
+      "max_speed_kmh": 350,
+      "formation": [
+        ["crh380a_end", 1],
+        ["crh380a_mid", 6],
+        ["crh380a_end", 1]
+      ]
+    },
+    {
+      "id": "cr400af_8",
+      "name": "复兴号 CR400AF · 8 辆编组",
+      "coupling_gap": 0.25,
+      "power_w": 11000000,
+      "max_tractive_force_n": 260000,
+      "max_brake_force_n": 367000,
+      "max_emergency_brake_force_n": 880800,
+      "adhesion": 0.25,
+      "davis": [0.009, 1.0e-4, 1.25e-5],
+      "max_speed_kmh": 350,
+      "formation": [
+        ["cr400af_end", 1],
+        ["cr400af_mid", 6],
+        ["cr400af_end", 1]
+      ]
+    },
+    {
+      "id": "cr400af_16",
+      "name": "复兴号 CR400AF · 16 辆长编组",
+      "coupling_gap": 0.25,
+      "power_w": 20000000,
+      "max_tractive_force_n": 320000,
+      "max_brake_force_n": 735000,
+      "max_emergency_brake_force_n": 1764000,
+      "adhesion": 0.25,
+      "davis": [0.009, 1.0e-4, 1.25e-5],
+      "max_speed_kmh": 350,
+      "formation": [
+        ["cr400af_end", 1],
+        ["cr400af_mid", 14],
+        ["cr400af_end", 1]
+      ]
+    }
+  ]
+}

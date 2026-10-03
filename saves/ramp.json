@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "root": {
+    "index": 0,
+    "def": "ramp_up_40",
+    "pose": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "heading_rad": 0.0
+    }
+  },
+  "pieces": [
+    {
+      "index": 1,
+      "def": "straight_40",
+      "parent": 0,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 2,
+      "def": "ramp_down_40",
+      "parent": 1,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 3,
+      "def": "straight_40",
+      "parent": 2,
+      "parent_port": "b",
+      "my_port": "a"
+    }
+  ],
+  "seams": [],
+  "switches": {},
+  "next_index": 4
+}

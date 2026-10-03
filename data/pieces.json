@@ -1,0 +1,369 @@
+{
+  "schema": 1,
+  "units": {
+    "length": "meter (地面投影弧长)",
+    "dtheta_deg": "度；正 = 向左(朝 +Z)转，负 = 向右转",
+    "grade": "每单位平面弧长的高程变化（0.03 = 3% 上坡）",
+    "offset_deg": "把整条 route 绕件原点旋转该角度",
+    "translate": "[x, z]；先把整条 route 平移，再按 offset_deg 旋转"
+  },
+  "notes": [
+    "端口位姿一律由 route 推导，本文件不写任何端口坐标，因此不可能出现「端口与弧长对不上」。",
+    "标准曲线半径 R=40 m；一节 45° 弯轨的弧长 = 40 * pi/4 = 31.4159 m，8 节恰好拼成一个整圆。",
+    "8 字形不需要交叉件：同向 8 节 + 反向 8 节即为两个精确外切的整圆（见 tests/test_geometry.py）。",
+    "交叉件是给立体交叉 / 双环 / 交叉渡线用的，其两条 route 互不相通（列车直穿、不能转弯）。",
+    "道岔的岔股必须是一条**标准 R40 弧**（用 radius 写，不要用 length），不能用「两条腿等长」去反推半径：",
+    "  等长会把岔股半径逼成 40/(pi/8) ≈ 101.86 m，而件库里没有这个半径的弯轨，于是岔股的出口端口 c 落在",
+    "  **标准件永远走不到的位置**上 —— 拿任何一节轨道去接都合不上环。让岔股 = 一节 22.5° 的 R40 弯轨，",
+    "  它的出口端口就与 curve_r40_l22_5 的远端**完全重合**，闭环所需的几何才始终在件库的能力之内（见 tests/test_catalog.py）。"
+  ],
+  "pieces": [
+    {
+      "id": "straight_10",
+      "name": "直轨 10m",
+      "category": "straight",
+      "mesh": "ballast",
+      "routes": [{ "from": "a", "to": "b", "length": 10.0, "dtheta_deg": 0.0 }]
+    },
+    {
+      "id": "straight_20",
+      "name": "直轨 20m",
+      "category": "straight",
+      "mesh": "ballast",
+      "routes": [{ "from": "a", "to": "b", "length": 20.0, "dtheta_deg": 0.0 }]
+    },
+    {
+      "id": "straight_40",
+      "name": "直轨 40m",
+      "category": "straight",
+      "mesh": "ballast",
+      "routes": [{ "from": "a", "to": "b", "length": 40.0, "dtheta_deg": 0.0 }]
+    },
+
+    {
+      "id": "curve_r40_l22_5",
+      "name": "左弯轨 R40 / 22.5°",
+      "category": "curve",
+      "mesh": "ballast",
+      "routes": [{ "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": 22.5 }]
+    },
+    {
+      "id": "curve_r40_r22_5",
+      "name": "右弯轨 R40 / 22.5°",
+      "category": "curve",
+      "mesh": "ballast",
+      "routes": [{ "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": -22.5 }]
+    },
+    {
+      "id": "curve_r40_l45",
+      "name": "左弯轨 R40 / 45°",
+      "category": "curve",
+      "mesh": "ballast",
+      "routes": [{ "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": 45.0 }]
+    },
+    {
+      "id": "curve_r40_r45",
+      "name": "右弯轨 R40 / 45°",
+      "category": "curve",
+      "mesh": "ballast",
+      "routes": [{ "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": -45.0 }]
+    },
+    {
+      "id": "curve_r40_l90",
+      "name": "左弯轨 R40 / 90°",
+      "category": "curve",
+      "mesh": "ballast",
+      "routes": [{ "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": 90.0 }]
+    },
+    {
+      "id": "curve_r40_r90",
+      "name": "右弯轨 R40 / 90°",
+      "category": "curve",
+      "mesh": "ballast",
+      "routes": [{ "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": -90.0 }]
+    },
+    {
+      "id": "curve_r80_l45",
+      "name": "缓弯轨 R80 / 45°",
+      "category": "curve",
+      "mesh": "ballast",
+      "routes": [{ "from": "a", "to": "b", "radius": 80.0, "dtheta_deg": 45.0 }]
+    },
+    {
+      "id": "curve_r80_r45",
+      "name": "缓弯轨 R80 / 45°（右）",
+      "category": "curve",
+      "mesh": "ballast",
+      "routes": [{ "from": "a", "to": "b", "radius": 80.0, "dtheta_deg": -45.0 }]
+    },
+
+    {
+      "id": "ramp_up_40",
+      "name": "上坡引桥 40m / 3%",
+      "category": "grade",
+      "mesh": "bridge",
+      "routes": [
+        { "from": "a", "to": "b", "length": 40.0, "dtheta_deg": 0.0, "grade": 0.03 }
+      ]
+    },
+    {
+      "id": "ramp_down_40",
+      "name": "下坡引桥 40m / 3%",
+      "category": "grade",
+      "mesh": "bridge",
+      "routes": [
+        { "from": "a", "to": "b", "length": 40.0, "dtheta_deg": 0.0, "grade": -0.03 }
+      ]
+    },
+    {
+      "id": "bridge_20",
+      "name": "高架桥面 20m",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "平直的一跨短桥面：几何与 straight_20 逐字一致，只是断面换成混凝土桥面 + 两侧矮墙，架空时**立在桥墩上**。桥墩按跨径布置 —— 一件桥面落两根墩（弧长的 1/4 与 3/4 处），所以墩距总是**半件长**的整数倍：20 m 件是 10 m 一档，40 m 件是 20 m 一档。想让桥下空出一段（跨线、跨路、跨另一股道），要么把桥面换长一件、要么拿长件替掉两件短的。",
+      "routes": [
+        { "from": "a", "to": "b", "length": 20.0, "dtheta_deg": 0.0 }
+      ]
+    },
+    {
+      "id": "bridge_40",
+      "name": "高架桥面 40m",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "平直的一跨桥面：几何与 straight_40 逐字一致（长 40 m、无转角、无坡度），只是断面换成混凝土桥面 + 两侧矮墙，架空时还**立在桥墩上**。有了它，「引桥 + 桥面 + 引桥」才能拼出一条真正架空、下面能过河过谷的跨线；没有它，架空段的中间那一跨只能借用直轨，外观是路堤而不是桥。",
+      "routes": [
+        { "from": "a", "to": "b", "length": 40.0, "dtheta_deg": 0.0 }
+      ]
+    },
+    {
+      "id": "bridge_80",
+      "name": "高架桥面 80m（大跨）",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "一跨 80 m 的长桥面，用处是**把桥墩挪开**：墩子仍旧只在 1/4 与 3/4 处（即距两端 20 m），于是正中间那 40 m 一根墩都没有 —— 立交要的正是这个。两件 40 m 的桥面接起来也是 80 m，但它们的墩子会落在 10/30/50/70 m 处，正中间照样有墩；**跨径的疏密由件长决定，不由总长决定**。",
+      "routes": [
+        { "from": "a", "to": "b", "length": 80.0, "dtheta_deg": 0.0 }
+      ]
+    },
+    {
+      "id": "bridge_up_40",
+      "name": "高架引桥 上坡 40m / 3%",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "上坡的桥面（坡度写在 route 的 grade 里，与 ramp_up_40 一样是 3%），断面与桥面件相同、也同样立墩 —— 于是「引桥」不是一道路堤，而是一段真正架起来的坡道。有它才拼得出**连续**的高架：桥面不能凭空升高，两端得有坡度把它顶上去，而 3% 是这套沙盘的极限坡（列车的牵引力表就是按它调的）：升 6 m 要 200 m，也就是 5 节。",
+      "routes": [
+        { "from": "a", "to": "b", "length": 40.0, "dtheta_deg": 0.0, "grade": 0.03 }
+      ]
+    },
+    {
+      "id": "bridge_down_40",
+      "name": "高架引桥 下坡 40m / 3%",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "下坡的桥面。与上坡成对出现才能让闭环在竖向配平（见 scenes/tracks.py 里 oval 的那条断言）。",
+      "routes": [
+        { "from": "a", "to": "b", "length": 40.0, "dtheta_deg": 0.0, "grade": -0.03 }
+      ]
+    },
+    {
+      "id": "bridge_up_20",
+      "name": "高架引桥 上坡 20m / 3%",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "半节长的上坡桥面（升 0.6 m）。用来微调高架的起点位置：高差只差一节 20 m 的时候，不必为了对齐而把整段引桥挪 40 m。",
+      "routes": [
+        { "from": "a", "to": "b", "length": 20.0, "dtheta_deg": 0.0, "grade": 0.03 }
+      ]
+    },
+    {
+      "id": "bridge_down_20",
+      "name": "高架引桥 下坡 20m / 3%",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "半节长的下坡桥面（降 0.6 m），与 bridge_up_20 成对使用。",
+      "routes": [
+        { "from": "a", "to": "b", "length": 20.0, "dtheta_deg": 0.0, "grade": -0.03 }
+      ]
+    },
+    {
+      "id": "bridge_r40_l45",
+      "name": "高架弯道 左 R40 / 45°",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "架空的 R40 45° 弯道：几何与 curve_r40_l45 逐字一致，只是换成桥面断面并立墩。高架要跨过另一条线路时几乎总要转一点方向，而弯道若用普通弯轨，桥面中间就断成了路堤 —— 一眼假。",
+      "routes": [
+        { "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": 45.0 }
+      ]
+    },
+    {
+      "id": "bridge_r40_r45",
+      "name": "高架弯道 右 R40 / 45°",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "同上，朝右（转角取负）。",
+      "routes": [
+        { "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": -45.0 }
+      ]
+    },
+    {
+      "id": "bridge_r40_l90",
+      "name": "高架弯道 左 R40 / 90°",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "架空的 R40 90° 弯道。立交里「从一条线拐到另一条线上方」往往就是一次 90° 转弯，用 45° 的两节拼也行，但墩子会多一倍。",
+      "routes": [
+        { "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": 90.0 }
+      ]
+    },
+    {
+      "id": "bridge_r40_r90",
+      "name": "高架弯道 右 R40 / 90°",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "同上，朝右。",
+      "routes": [
+        { "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": -90.0 }
+      ]
+    },
+    {
+      "id": "bridge_r40_l45_up",
+      "name": "高架弯引桥 左 45° 上坡",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "**边爬升边转弯**的桥面：弧长 31.4159 m（R40 的 45°），坡度 3%，升 0.94 m。立交的引桥常常既在弯道上、又在坡上，只能用「弯 + 坡」合一的一节来表达 —— 两节直坡道接一节平弯道是拼不出这个形状的。",
+      "routes": [
+        { "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": 45.0, "grade": 0.03 }
+      ]
+    },
+    {
+      "id": "bridge_r40_l45_down",
+      "name": "高架弯引桥 左 45° 下坡",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "同上，降 0.94 m。与上坡的一节成对。",
+      "routes": [
+        { "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": 45.0, "grade": -0.03 }
+      ]
+    },
+    {
+      "id": "bridge_r40_r45_up",
+      "name": "高架弯引桥 右 45° 上坡",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "右转的上坡弯桥面。",
+      "routes": [
+        { "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": -45.0, "grade": 0.03 }
+      ]
+    },
+    {
+      "id": "bridge_r40_r45_down",
+      "name": "高架弯引桥 右 45° 下坡",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "右转的下坡弯桥面。",
+      "routes": [
+        { "from": "a", "to": "b", "radius": 40.0, "dtheta_deg": -45.0, "grade": -0.03 }
+      ]
+    },
+    {
+      "id": "bridge_r80_l45",
+      "name": "高架缓弯 左 R80 / 45°",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "R80 的缓弯桥面：几何与 curve_r80_l45 一致。跨线高架因为要爬坡，半径往往比地面线路大，R80 的弯道列车过得也稳。",
+      "routes": [
+        { "from": "a", "to": "b", "radius": 80.0, "dtheta_deg": 45.0 }
+      ]
+    },
+    {
+      "id": "bridge_r80_r45",
+      "name": "高架缓弯 右 R80 / 45°",
+      "category": "viaduct",
+      "mesh": "deck",
+      "notes": "同上，朝右。",
+      "routes": [
+        { "from": "a", "to": "b", "radius": 80.0, "dtheta_deg": -45.0 }
+      ]
+    },
+
+    {
+      "id": "crossing_45",
+      "name": "菱形交叉 45°",
+      "category": "crossing",
+      "mesh": "ballast",
+      "routes": [
+        {
+          "from": "a",
+          "to": "c",
+          "length": 40.0,
+          "dtheta_deg": 0.0,
+          "translate": [-20.0, 0.0]
+        },
+        {
+          "from": "b",
+          "to": "d",
+          "length": 40.0,
+          "dtheta_deg": 0.0,
+          "translate": [-20.0, 0.0],
+          "offset_deg": 45.0
+        }
+      ]
+    },
+    {
+      "id": "crossing_90",
+      "name": "十字交叉 90°",
+      "category": "crossing",
+      "mesh": "ballast",
+      "routes": [
+        {
+          "from": "a",
+          "to": "c",
+          "length": 40.0,
+          "dtheta_deg": 0.0,
+          "translate": [-20.0, 0.0]
+        },
+        {
+          "from": "b",
+          "to": "d",
+          "length": 40.0,
+          "dtheta_deg": 0.0,
+          "translate": [-20.0, 0.0],
+          "offset_deg": 90.0
+        }
+      ]
+    },
+
+    {
+      "id": "turnout_l_40",
+      "name": "左开道岔 40m / 22.5°",
+      "category": "switch",
+      "mesh": "ballast",
+      "notes": "直股 a→b 是 40 m 直轨（= straight_40 的长度，直股因此完全在模块格上）。岔股 a→c 是**一节标准的 R40 22.5° 弯轨**，弧长 15.708 m，出口端口 c 与 curve_r40_l22_5 的远端逐位重合。岔股（15.7 m）比直股（40 m）短是有意的：两条腿等长会把岔股半径逼成 ≈101.86 m，件库里没有这个半径，c 就没人接得上。",
+      "routes": [
+        { "from": "a", "to": "b", "length": 40.0, "dtheta_deg": 0.0 },
+        { "from": "a", "to": "c", "radius": 40.0, "dtheta_deg": 22.5 }
+      ]
+    },
+    {
+      "id": "turnout_r_40",
+      "name": "右开道岔 40m / 22.5°",
+      "category": "switch",
+      "mesh": "ballast",
+      "notes": "同 turnout_l_40，只是岔股朝右（转角取负）。",
+      "routes": [
+        { "from": "a", "to": "b", "length": 40.0, "dtheta_deg": 0.0 },
+        { "from": "a", "to": "c", "radius": 40.0, "dtheta_deg": -22.5 }
+      ]
+    },
+
+    {
+      "id": "buffer_stop",
+      "name": "缓冲端（死端）",
+      "category": "terminal",
+      "mesh": "buffer",
+      "notes": "只有一个端口、没有任何 route —— 列车到此为止。它本身不贡献可走行长度，只是立在接缝处的一个车挡。",
+      "ports": [{ "id": "a", "x": 0.0, "z": 0.0, "heading_deg": 180.0 }],
+      "routes": []
+    }
+  ]
+}
