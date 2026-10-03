@@ -105,4 +105,4 @@ pytest
 
 ## 许可
 
-暂未指定许可证。如需开源请补充 `LICENSE` 文件。
+采用 **BSD Zero Clause License（0BSD）** —— 最开放的 BSD 许可证：可任意使用、复制、修改、再分发（含商用与闭源），无需保留署名。详见 [`LICENSE`](LICENSE)。
