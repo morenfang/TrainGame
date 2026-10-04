@@ -306,7 +306,7 @@ class TrackEditor:
         self._scenery_highlight = base.render.attachNewNode("scenery_highlight")
         self._rebuild_scenery()
 
-        #: 列车音效（行驶声 / 轮轨声随车速变速 + 鸣笛）。null 音频下自动退化为空壳。
+        #: 列车音效（引擎随车速变速 + 风笛）。null 音频下自动退化为空壳。
         self.audio = TrainAudio(base)
 
     # ==================================================================== #

@@ -461,6 +461,52 @@ def test_view_mode_left_drag_orbits_instead_of_placing(app, editor):
     assert editor.camera.camera_position() != before, "左键拖拽没有转动相机"
 
 
+def _camera_axis_drift(app, action):
+    """执行一次鼠标动作，返回相机位移在"屏幕右 / 屏幕上"上的投影。"""
+    quat = app.cam.getQuat(app.render)
+    right, up = quat.getRight(), quat.getUp()
+    before = Vec3(app.cam.getPos(app.render))
+    action()
+    delta = Vec3(app.cam.getPos(app.render)) - before
+    return delta.dot(right), delta.dot(up)
+
+
+def test_dragging_right_keeps_the_world_under_the_cursor(app, editor):
+    """整条输入链路一起验：鼠标往右拖，画面里的东西就得往右走。
+
+    相机那两个正负号已经在 ``tests/test_camera.py`` 里量过了，这里补的是它**上游**
+    那一段 —— 鼠标归一化坐标（Panda3D 的 y 是向上为正）→ 乘窗口尺寸 → 喂给相机。
+    链条上任何一环弄错，表现出来都一模一样（"方向反了"），所以必须从"人拖鼠标"
+    这一头量一遍。
+    """
+    editor.toggle_mode()                       # 视角模式：左键 = 环绕
+
+    def drag_right():
+        editor._on_press()
+        editor.fake_mouse = (editor.fake_mouse[0] + 0.4, editor.fake_mouse[1])
+        editor._apply_drag()
+        editor._on_release()
+
+    along_right, _ = _camera_axis_drift(app, drag_right)
+    assert along_right < -1.0, (
+        "鼠标往右拖，相机也跟着往右走 —— 画面会往左跑，方向反了")
+
+
+def test_dragging_up_keeps_the_world_under_the_cursor(app, editor):
+    """纵向同理：鼠标往上拖（归一化坐标 y 变大），画面得往上走。"""
+    editor.toggle_mode()
+
+    def drag_up():
+        editor._on_press()
+        editor.fake_mouse = (editor.fake_mouse[0], editor.fake_mouse[1] + 0.4)
+        editor._apply_drag()
+        editor._on_release()
+
+    _, along_up = _camera_axis_drift(app, drag_up)
+    assert along_up < -1.0, (
+        "鼠标往上拖，相机也跟着往上走 —— 画面的移动方向是反的")
+
+
 def test_spawning_a_train_switches_to_view_mode(app, editor):
     """**加载列车时鼠标不该还是放置状态** —— N 之后自动切到视角。"""
     close_a_circle(editor)

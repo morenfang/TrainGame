@@ -6,6 +6,15 @@
 * **中键拖拽** = 平移：目标点沿屏幕平面移动（左键留给放轨道）。
 * **滚轮** = 沿视线前后推拉。
 
+拖拽方向：一律"抓住画面拖"
+------------------------------------------------
+鼠标往右拖，**画面里的东西就往右走**；往上拖就往上去 —— 和 Google Earth / 地图
+类应用一致。它的实现方式是让**相机往鼠标的反方向动**（相机退，画面就进）。
+
+这条约定是有来由的：早期版本把两个轴都写成了"相机跟着鼠标走"，于是拖右变成画面
+往左跑，用户一眼就看出"方向反了"。方向这种东西在代码里看不出来、只能靠体感，所以
+``tests/test_camera.py`` 把"画面跟手"钉成了断言 —— 它量的是相机自身的位移方向。
+
 角度约定（与 core 一致，减少记忆负担）
 ------------------------------------------------
 ``azimuth`` 沿用 core 的 heading 语义：从目标点看相机，**0 = 相机在 +X 方向**，
@@ -66,20 +75,31 @@ class OrbitCamera:
     # ---------------------------------------------------------------- 交互
 
     def orbit(self, dx: float, dy: float) -> None:
-        self.azimuth -= dx * _ORBIT_RADIANS_PER_PIXEL
+        """环绕视角。
+
+        符号按"抓住画面拖"约定：``dx > 0``（鼠标往右）时**增大**方位角，相机跟着
+        往左绕，画面里的东西于是往右走。俯仰同理 —— 鼠标往上拖，相机压低，画面
+        往上走（看到的东西往上翻）。
+        """
+        self.azimuth += dx * _ORBIT_RADIANS_PER_PIXEL
         self.elevation = _clamp(
-            self.elevation + dy * _ORBIT_RADIANS_PER_PIXEL,
+            self.elevation - dy * _ORBIT_RADIANS_PER_PIXEL,
             _MIN_ELEVATION, _MAX_ELEVATION,
         )
         self.apply()
 
     def pan(self, dx: float, dy: float) -> None:
-        """沿屏幕平面平移目标点。"""
+        """沿屏幕平面平移。
+
+        平移的"跟手"是反着来的：想让画面往右走，得把**目标点往左挪**（相机跟着
+        目标点走，画面就相对往右）。所以这里整体乘一个负号，和 :meth:`orbit`
+        共用一个约定。
+        """
         quat = self.camera.getQuat()
         right = quat.getRight()
         up = quat.getUp()
         scale = self.distance * _PAN_PER_PIXEL
-        offset = right * (-dx * scale) + up * (dy * scale)
+        offset = (right * dx + up * dy) * -scale
         self.target[0] += offset[0]
         self.target[1] += offset[1]
         self.target[2] += offset[2]

@@ -1,0 +1,1191 @@
+{
+  "schema": 2,
+  "roots": [
+    {
+      "index": 0,
+      "def": "straight_40",
+      "pose": {
+        "x": 55.427390215051375,
+        "y": 0.0,
+        "z": 45.44269560108785,
+        "heading_rad": 0.0
+      }
+    }
+  ],
+  "pieces": [
+    {
+      "index": 1,
+      "def": "straight_40",
+      "parent": 0,
+      "parent_port": "a",
+      "my_port": "a"
+    },
+    {
+      "index": 4,
+      "def": "curve_r40_l90",
+      "parent": 0,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 5,
+      "def": "curve_r40_l90",
+      "parent": 4,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 6,
+      "def": "ramp_up_40",
+      "parent": 5,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 7,
+      "def": "ramp_up_40",
+      "parent": 6,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 8,
+      "def": "ramp_up_40",
+      "parent": 7,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 9,
+      "def": "bridge_40",
+      "parent": 8,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 10,
+      "def": "bridge_40",
+      "parent": 9,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 11,
+      "def": "curve_r40_l90",
+      "parent": 10,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 12,
+      "def": "ramp_down_40",
+      "parent": 11,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 13,
+      "def": "ramp_down_40",
+      "parent": 12,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 14,
+      "def": "ramp_down_40",
+      "parent": 13,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 15,
+      "def": "straight_40",
+      "parent": 14,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 16,
+      "def": "curve_r40_l90",
+      "parent": 15,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 17,
+      "def": "curve_r40_l90",
+      "parent": 16,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 18,
+      "def": "straight_40",
+      "parent": 17,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 19,
+      "def": "straight_40",
+      "parent": 18,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 20,
+      "def": "straight_40",
+      "parent": 19,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 21,
+      "def": "straight_40",
+      "parent": 20,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 22,
+      "def": "straight_40",
+      "parent": 21,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 24,
+      "def": "curve_r40_r90",
+      "parent": 22,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 25,
+      "def": "straight_40",
+      "parent": 24,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 26,
+      "def": "straight_40",
+      "parent": 25,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 27,
+      "def": "straight_40",
+      "parent": 26,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 28,
+      "def": "straight_40",
+      "parent": 27,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 29,
+      "def": "curve_r40_r90",
+      "parent": 28,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 30,
+      "def": "straight_40",
+      "parent": 29,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 31,
+      "def": "straight_40",
+      "parent": 30,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 32,
+      "def": "straight_40",
+      "parent": 31,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 33,
+      "def": "straight_40",
+      "parent": 32,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 34,
+      "def": "curve_r40_r90",
+      "parent": 33,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 35,
+      "def": "straight_40",
+      "parent": 34,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 36,
+      "def": "straight_40",
+      "parent": 35,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 37,
+      "def": "straight_40",
+      "parent": 36,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 38,
+      "def": "curve_r40_r90",
+      "parent": 37,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 39,
+      "def": "curve_r40_l90",
+      "parent": 1,
+      "parent_port": "b",
+      "my_port": "a"
+    },
+    {
+      "index": 40,
+      "def": "straight_40",
+      "parent": 38,
+      "parent_port": "b",
+      "my_port": "a"
+    }
+  ],
+  "seams": [],
+  "switches": {},
+  "next_index": 41,
+  "saved_from": "track_editor",
+  "user_scenery": {
+    "houses": [
+      {
+        "x": -130.5856186733821,
+        "z": -70.36046164560548,
+        "width": 13.0,
+        "depth": 13.0,
+        "height": 26.0,
+        "heading": 0.0,
+        "seed": 842109712,
+        "kind": "tower"
+      },
+      {
+        "x": -127.14811517198136,
+        "z": -38.00394306917684,
+        "width": 30.0,
+        "depth": 18.0,
+        "height": 8.5,
+        "heading": 1.5707963267948966,
+        "seed": 305426423,
+        "kind": "mall"
+      },
+      {
+        "x": -131.13107087411447,
+        "z": -12.22538543680372,
+        "width": 7.0,
+        "depth": 6.0,
+        "height": 3.4,
+        "heading": 1.5707963267948966,
+        "seed": 1017231672,
+        "kind": "shop"
+      },
+      {
+        "x": -130.94068236335795,
+        "z": -0.9038798516788233,
+        "width": 7.0,
+        "depth": 6.0,
+        "height": 3.4,
+        "heading": 1.5707963267948966,
+        "seed": 499884877,
+        "kind": "shop"
+      },
+      {
+        "x": -130.55510827343008,
+        "z": 12.303676096630909,
+        "width": 9.0,
+        "depth": 7.0,
+        "height": 4.6,
+        "heading": 1.5707963267948966,
+        "seed": 709248458,
+        "kind": "cottage"
+      },
+      {
+        "x": -130.26775113654094,
+        "z": 25.384130745296886,
+        "width": 9.0,
+        "depth": 7.0,
+        "height": 4.6,
+        "heading": 1.5707963267948966,
+        "seed": 533729008,
+        "kind": "cottage"
+      },
+      {
+        "x": -130.1768317808093,
+        "z": 39.99328241463124,
+        "width": 9.0,
+        "depth": 7.0,
+        "height": 4.6,
+        "heading": 1.5707963267948966,
+        "seed": 213237242,
+        "kind": "cottage"
+      },
+      {
+        "x": -122.28044686475417,
+        "z": 99.8590742482901,
+        "width": 9.0,
+        "depth": 7.0,
+        "height": 4.6,
+        "heading": 3.9269908169872414,
+        "seed": 474732433,
+        "kind": "cottage"
+      },
+      {
+        "x": -77.87279666090356,
+        "z": 6.751617606580282,
+        "width": 9.0,
+        "depth": 7.0,
+        "height": 4.6,
+        "heading": 9.424777960769385,
+        "seed": 137653415,
+        "kind": "cottage"
+      },
+      {
+        "x": -76.83091346417979,
+        "z": 23.78851791454204,
+        "width": 9.0,
+        "depth": 7.0,
+        "height": 4.6,
+        "heading": 10.995574287564283,
+        "seed": 202175873,
+        "kind": "cottage"
+      },
+      {
+        "x": -77.59013715864003,
+        "z": 36.53589509711776,
+        "width": 9.0,
+        "depth": 7.0,
+        "height": 4.6,
+        "heading": 14.13716694115408,
+        "seed": 1012147040,
+        "kind": "cottage"
+      },
+      {
+        "x": -77.65677909265867,
+        "z": 44.203141087040734,
+        "width": 9.0,
+        "depth": 7.0,
+        "height": 4.6,
+        "heading": 14.13716694115408,
+        "seed": 117611168,
+        "kind": "cottage"
+      },
+      {
+        "x": -79.64418684828067,
+        "z": 101.44846956068805,
+        "width": 30.0,
+        "depth": 18.0,
+        "height": 8.5,
+        "heading": 14.13716694115408,
+        "seed": 401138837,
+        "kind": "mall"
+      },
+      {
+        "x": -77.27652536505013,
+        "z": 72.97654261293061,
+        "width": 13.0,
+        "depth": 13.0,
+        "height": 26.0,
+        "heading": 14.13716694115408,
+        "seed": 869037059,
+        "kind": "tower"
+      }
+    ],
+    "stations": [
+      {
+        "x": -80.58372385754072,
+        "z": -23.451053124532564,
+        "style": "classical",
+        "width": 22.0,
+        "depth": 11.0,
+        "height": 6.8,
+        "heading": 1.5707963267948966,
+        "seed": 468770484,
+        "with_platform": true
+      },
+      {
+        "x": 46.265778286666375,
+        "z": 28.643392364547196,
+        "style": "modern",
+        "width": 26.0,
+        "depth": 12.0,
+        "height": 6.0,
+        "heading": 3.141592653589793,
+        "seed": 224826117,
+        "with_platform": true
+      },
+      {
+        "x": 77.91620352375419,
+        "z": 28.73634748330346,
+        "style": "modern",
+        "width": 26.0,
+        "depth": 12.0,
+        "height": 6.0,
+        "heading": 3.141592653589793,
+        "seed": 230256547,
+        "with_platform": true
+      }
+    ],
+    "peaks": [
+      {
+        "x": 37.83147440789489,
+        "z": -25.740431960654277,
+        "radius": 40.0,
+        "height": 30.0,
+        "seed": 395332037,
+        "sides": 14,
+        "rings": 5,
+        "rough": 0.2,
+        "rocky": true,
+        "snow": true
+      },
+      {
+        "x": 81.7461776312507,
+        "z": -24.324151118283304,
+        "radius": 40.0,
+        "height": 30.0,
+        "seed": 504847091,
+        "sides": 14,
+        "rings": 5,
+        "rough": 0.2,
+        "rocky": true,
+        "snow": true
+      },
+      {
+        "x": -97.13249092347894,
+        "z": -79.38083566309268,
+        "radius": 26.0,
+        "height": 10.0,
+        "seed": 463691848,
+        "sides": 12,
+        "rings": 3,
+        "rough": 0.14,
+        "rocky": false,
+        "snow": false
+      },
+      {
+        "x": 95.87723930310754,
+        "z": 86.0546837072192,
+        "radius": 26.0,
+        "height": 10.0,
+        "seed": 953207921,
+        "sides": 12,
+        "rings": 3,
+        "rough": 0.14,
+        "rocky": false,
+        "snow": false
+      },
+      {
+        "x": 74.61173712582263,
+        "z": 86.83914865790263,
+        "radius": 26.0,
+        "height": 10.0,
+        "seed": 175580138,
+        "sides": 12,
+        "rings": 3,
+        "rough": 0.14,
+        "rocky": false,
+        "snow": false
+      },
+      {
+        "x": -21.608941955921665,
+        "z": 81.43722982162805,
+        "radius": 26.0,
+        "height": 10.0,
+        "seed": 657624006,
+        "sides": 12,
+        "rings": 3,
+        "rough": 0.14,
+        "rocky": false,
+        "snow": false
+      },
+      {
+        "x": 24.68106067362089,
+        "z": 82.28972921321204,
+        "radius": 26.0,
+        "height": 10.0,
+        "seed": 962642819,
+        "sides": 12,
+        "rings": 3,
+        "rough": 0.14,
+        "rocky": false,
+        "snow": false
+      },
+      {
+        "x": -44.34901358258344,
+        "z": -139.17337454053734,
+        "radius": 40.0,
+        "height": 30.0,
+        "seed": 975746402,
+        "sides": 14,
+        "rings": 5,
+        "rough": 0.2,
+        "rocky": true,
+        "snow": true
+      },
+      {
+        "x": -22.457987385707042,
+        "z": -136.9304109860214,
+        "radius": 26.0,
+        "height": 10.0,
+        "seed": 611121286,
+        "sides": 12,
+        "rings": 3,
+        "rough": 0.14,
+        "rocky": false,
+        "snow": false
+      },
+      {
+        "x": 33.30532684862362,
+        "z": -145.75492455555502,
+        "radius": 40.0,
+        "height": 30.0,
+        "seed": 802167074,
+        "sides": 14,
+        "rings": 5,
+        "rough": 0.2,
+        "rocky": true,
+        "snow": true
+      },
+      {
+        "x": 111.97883875209351,
+        "z": -133.935187293097,
+        "radius": 40.0,
+        "height": 30.0,
+        "seed": 404170940,
+        "sides": 14,
+        "rings": 5,
+        "rough": 0.2,
+        "rocky": true,
+        "snow": true
+      },
+      {
+        "x": 153.88713843637973,
+        "z": -158.99230746562193,
+        "radius": 40.0,
+        "height": 30.0,
+        "seed": 38821353,
+        "sides": 14,
+        "rings": 5,
+        "rough": 0.2,
+        "rocky": true,
+        "snow": true
+      }
+    ],
+    "trees": [
+      {
+        "x": 132.78054210113024,
+        "z": 23.836804759410256,
+        "height": 11.0,
+        "seed": 776751692,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 121.83908162187065,
+        "z": 22.053932494972287,
+        "height": 11.0,
+        "seed": 449162495,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 127.5278225480441,
+        "z": 2.6919690032560197,
+        "height": 11.0,
+        "seed": 547026076,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 130.0419475242837,
+        "z": -15.81237405742877,
+        "height": 11.0,
+        "seed": 938686939,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 148.52525238568205,
+        "z": 16.327303271573783,
+        "height": 11.0,
+        "seed": 453089449,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 151.21130206695454,
+        "z": 24.252685563650857,
+        "height": 11.0,
+        "seed": 366750643,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 138.52777580868258,
+        "z": -53.28712615633984,
+        "height": 11.0,
+        "seed": 1005995437,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 141.96931070732305,
+        "z": -33.8607691242002,
+        "height": 11.0,
+        "seed": 954256856,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 152.89680272096322,
+        "z": -8.274865211150654,
+        "height": 11.0,
+        "seed": 99513377,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 159.73096382602262,
+        "z": -29.295064039954184,
+        "height": 11.0,
+        "seed": 122269207,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 140.4183518024598,
+        "z": -1.5731555277382085,
+        "height": 11.0,
+        "seed": 97187362,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 140.8710305163065,
+        "z": 6.439297983211247,
+        "height": 9.0,
+        "seed": 736745515,
+        "conifer": null,
+        "kind": "oak"
+      },
+      {
+        "x": 139.33907946037365,
+        "z": 22.856109830686137,
+        "height": 9.0,
+        "seed": 596945781,
+        "conifer": null,
+        "kind": "oak"
+      },
+      {
+        "x": 158.87058627383627,
+        "z": 18.587268382697573,
+        "height": 9.0,
+        "seed": 852975349,
+        "conifer": null,
+        "kind": "oak"
+      },
+      {
+        "x": 160.37669861457138,
+        "z": 4.670372162585409,
+        "height": 15.0,
+        "seed": 219815060,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 151.1123974667058,
+        "z": -24.42559515254834,
+        "height": 15.0,
+        "seed": 175730932,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 156.20331683742535,
+        "z": -42.045876183961155,
+        "height": 15.0,
+        "seed": 716975069,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 138.89373210607317,
+        "z": -16.89101093823757,
+        "height": 15.0,
+        "seed": 516278206,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 125.24595975200563,
+        "z": -39.33021486463343,
+        "height": 15.0,
+        "seed": 548699721,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 128.39956170933917,
+        "z": -56.736063219879526,
+        "height": 15.0,
+        "seed": 233766462,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 146.04076651132024,
+        "z": -56.139051491555534,
+        "height": 15.0,
+        "seed": 169074088,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 117.59411877722762,
+        "z": -58.891163602746104,
+        "height": 15.0,
+        "seed": 469259295,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 103.08332578023719,
+        "z": -38.904388828269646,
+        "height": 15.0,
+        "seed": 253507207,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 62.42971312130436,
+        "z": -66.99441083560976,
+        "height": 15.0,
+        "seed": 242329768,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": -128.16402261726864,
+        "z": 51.86714656035198,
+        "height": 15.0,
+        "seed": 226051290,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": -128.2035317286124,
+        "z": 59.666807291158335,
+        "height": 15.0,
+        "seed": 526823379,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": -129.38736311771203,
+        "z": 68.04723921482787,
+        "height": 15.0,
+        "seed": 232642965,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": -130.34237128183383,
+        "z": 76.02829551161918,
+        "height": 8.0,
+        "seed": 287420731,
+        "conifer": null,
+        "kind": "palm"
+      },
+      {
+        "x": -131.0549867341332,
+        "z": 82.47147892358029,
+        "height": 8.0,
+        "seed": 204165185,
+        "conifer": null,
+        "kind": "palm"
+      },
+      {
+        "x": -74.84990966661667,
+        "z": -46.78472171714202,
+        "height": 8.0,
+        "seed": 743737294,
+        "conifer": null,
+        "kind": "palm"
+      },
+      {
+        "x": -75.30960377646446,
+        "z": -3.6615362609846898,
+        "height": 8.0,
+        "seed": 284692525,
+        "conifer": null,
+        "kind": "palm"
+      },
+      {
+        "x": -12.920441832463808,
+        "z": 76.4867415487602,
+        "height": 11.0,
+        "seed": 218810062,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 4.066345381349407,
+        "z": 92.2755327534122,
+        "height": 11.0,
+        "seed": 495698028,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 50.605641312483755,
+        "z": 102.27592447467245,
+        "height": 11.0,
+        "seed": 468169314,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 70.81064993288922,
+        "z": 107.03951047135425,
+        "height": 11.0,
+        "seed": 90339024,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 81.70340625463814,
+        "z": 61.238906015390796,
+        "height": 11.0,
+        "seed": 946158818,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 46.94256385373566,
+        "z": 58.10392835840514,
+        "height": 11.0,
+        "seed": 496158156,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 52.56772515310132,
+        "z": 65.93004071369367,
+        "height": 11.0,
+        "seed": 601490986,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": -4.240418358468759,
+        "z": 55.77878254766023,
+        "height": 11.0,
+        "seed": 762728747,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 4.101283674990725,
+        "z": 17.30296384329307,
+        "height": 11.0,
+        "seed": 60940784,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": -9.41008332192294,
+        "z": -23.48986434818613,
+        "height": 11.0,
+        "seed": 162151944,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": -33.04559521483674,
+        "z": 146.37286505149308,
+        "height": 11.0,
+        "seed": 691423289,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": -19.63511997071845,
+        "z": 150.2885428597322,
+        "height": 11.0,
+        "seed": 250641083,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": -11.351511804057225,
+        "z": 150.0720867710912,
+        "height": 9.0,
+        "seed": 146156568,
+        "conifer": null,
+        "kind": "oak"
+      },
+      {
+        "x": 1.2257219013940812,
+        "z": 151.37923280297565,
+        "height": 15.0,
+        "seed": 698720619,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 11.708520063029908,
+        "z": 151.30932138832955,
+        "height": 8.0,
+        "seed": 780856606,
+        "conifer": null,
+        "kind": "palm"
+      },
+      {
+        "x": 1.315670376649905,
+        "z": 142.08786817931244,
+        "height": 8.0,
+        "seed": 192860200,
+        "conifer": null,
+        "kind": "palm"
+      },
+      {
+        "x": 28.26675170603363,
+        "z": 148.70888483228055,
+        "height": 8.0,
+        "seed": 688676815,
+        "conifer": null,
+        "kind": "palm"
+      },
+      {
+        "x": 13.248884649851675,
+        "z": 141.70539355885413,
+        "height": 8.0,
+        "seed": 173133744,
+        "conifer": null,
+        "kind": "palm"
+      },
+      {
+        "x": 20.266975851280165,
+        "z": 151.23129144374425,
+        "height": 8.0,
+        "seed": 506578613,
+        "conifer": null,
+        "kind": "palm"
+      },
+      {
+        "x": 25.419386998175952,
+        "z": 144.3517718690055,
+        "height": 11.0,
+        "seed": 785964111,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 41.75177038227079,
+        "z": 156.4930935561034,
+        "height": 11.0,
+        "seed": 75137510,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 43.10505131264608,
+        "z": 151.38189389121862,
+        "height": 11.0,
+        "seed": 290580694,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 60.49980253847747,
+        "z": 150.08309204930063,
+        "height": 11.0,
+        "seed": 1063042385,
+        "conifer": null,
+        "kind": "pine"
+      },
+      {
+        "x": 70.63689674530013,
+        "z": 145.72274757159755,
+        "height": 9.0,
+        "seed": 221509720,
+        "conifer": null,
+        "kind": "oak"
+      },
+      {
+        "x": 47.173628022717736,
+        "z": 139.62714809895257,
+        "height": 9.0,
+        "seed": 128216557,
+        "conifer": null,
+        "kind": "oak"
+      },
+      {
+        "x": 42.5110318852351,
+        "z": 140.11084274576243,
+        "height": 9.0,
+        "seed": 777757069,
+        "conifer": null,
+        "kind": "oak"
+      },
+      {
+        "x": 35.64188347443104,
+        "z": 141.59033610458096,
+        "height": 9.0,
+        "seed": 156557222,
+        "conifer": null,
+        "kind": "oak"
+      },
+      {
+        "x": 65.89965092361987,
+        "z": 152.97396066435965,
+        "height": 15.0,
+        "seed": 451482398,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 94.03352505859112,
+        "z": 153.08611869746167,
+        "height": 8.0,
+        "seed": 701900416,
+        "conifer": null,
+        "kind": "palm"
+      },
+      {
+        "x": 96.89998489353366,
+        "z": 152.63701598922134,
+        "height": 8.0,
+        "seed": 8605955,
+        "conifer": null,
+        "kind": "palm"
+      },
+      {
+        "x": 77.34053898471859,
+        "z": 151.79953659321077,
+        "height": 15.0,
+        "seed": 294530208,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 61.81366809042214,
+        "z": 141.9195985663394,
+        "height": 15.0,
+        "seed": 327247479,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 62.046615997460435,
+        "z": 140.95441251197232,
+        "height": 15.0,
+        "seed": 96790291,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 108.80223355709921,
+        "z": 146.58856766021844,
+        "height": 15.0,
+        "seed": 217137036,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 78.5764328358662,
+        "z": 143.4792674799447,
+        "height": 15.0,
+        "seed": 292361374,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 97.76896894089515,
+        "z": 140.76309499099688,
+        "height": 15.0,
+        "seed": 415396150,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 120.85760796394658,
+        "z": 152.02699032082995,
+        "height": 15.0,
+        "seed": 945489126,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 124.37850143682513,
+        "z": 151.78637211858674,
+        "height": 15.0,
+        "seed": 136033147,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 131.24401713716,
+        "z": 150.27235961008444,
+        "height": 15.0,
+        "seed": 573376685,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 134.49863715365228,
+        "z": 150.45629950543213,
+        "height": 15.0,
+        "seed": 924515470,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 138.71527448112852,
+        "z": 148.02367919401965,
+        "height": 15.0,
+        "seed": 539659320,
+        "conifer": null,
+        "kind": "poplar"
+      },
+      {
+        "x": 154.83279870233264,
+        "z": 143.26059856870063,
+        "height": 15.0,
+        "seed": 1060421068,
+        "conifer": null,
+        "kind": "poplar"
+      }
+    ]
+  }
+}
