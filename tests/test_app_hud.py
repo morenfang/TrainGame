@@ -254,6 +254,64 @@ def test_default_hud_panels_never_overlap(app, aspect):
         assert rect[3] <= 1.0 - _MARGIN + EPS, name
 
 
+class _PromptStub:
+    """借真身的方法量最坏提示条：只备齐 ``_prompt_text`` 用到的那几样。
+
+    为什么要借而不是抄一份文本：提示条的措辞、名单预算、回显截断都在
+    ``app/editor.py`` 里，抄一份的话改了实现这条测试就测不到真东西了。
+    """
+
+    _prompt = editor_mod.PROMPT_LOAD
+    #: 输入框的上限就是 40 个字符（``_SAVE_NAME_MAX``）。
+    _prompt_buffer = "abcdefghijklmnopqrstuvwxyz0123456789abcd"
+    _prompt_error = "　（abcdefghijklmnopqrstuvwxyz0123456789abcd.json 不存在）"
+    _prompt_target = editor_mod.TrackEditor._prompt_target
+    _prompt_target_label = editor_mod.TrackEditor._prompt_target_label
+    _prompt_files = editor_mod.TrackEditor._prompt_files
+    _prompt_text = editor_mod.TrackEditor._prompt_text
+
+    def __init__(self, save_dir):
+        self._save_dir = save_dir
+        self.save_path = save_dir / "layout.json"
+
+
+@pytest.mark.parametrize("aspect", _ASPECTS)
+def test_load_prompt_line_never_leaves_the_screen(app, aspect, tmp_path):
+    """写到最满的读档提示条也要落在屏幕内，且不压住还亮着的面板。
+
+    "提示条是一行居中文字"这个设计最怕变长：40 字的文件名 + 一长串存档名单
+    加起来能把面板顶出屏幕。所以名单有字符预算、回显有截断，这条测试就是给
+    这两个上限兜底的。至于底部那两块 —— 填文件名时编辑器会把它们收起来
+    （见 ``test_prompt_hides_the_bottom_panels``），这里照抄那个状态。
+    """
+    for index in range(20):
+        (tmp_path / f"abcdefghijklmnopqrstuvwxyz0123456789abcd{index}.json"
+         ).write_text("{}", encoding="utf-8")
+    long_name = "abcdefghijklmnopqrstuvwxyz0123456789abcd"
+    stub = _PromptStub(tmp_path)
+    stub.save_path = tmp_path / f"{long_name}.json"
+    text = stub._prompt_text()
+    assert text, "最坏提示条不该是空的（否则面板会整块隐藏，测了个寂寞）"
+
+    hud = build_default_hud(app)
+    hud.aspect_override = aspect
+    hud.set_text("status", _WORST_CASE["status"])
+    hud.set_text("loop", _WORST_CASE["loop"])
+    hud.set_text("help", "")            # 填文件名时这两块被收起来
+    hud.set_text("train", "")
+    hud.set_text("toast", text)
+
+    toast = panel_box(hud, "toast")
+    assert toast[0] >= -aspect + _MARGIN - EPS
+    assert toast[1] <= aspect - _MARGIN + EPS
+    assert toast[2] >= -1.0 + _MARGIN - EPS
+    assert toast[3] <= 1.0 - _MARGIN + EPS
+    for name in ("status", "loop"):
+        assert not overlaps(toast, panel_box(hud, name)), (
+            f"aspect={aspect}: 读档提示条压住了 {name}：{toast}"
+        )
+
+
 # --------------------------------------------------------------------------- #
 # 渲染位置（几何断言兜不住的那一类）
 # --------------------------------------------------------------------------- #

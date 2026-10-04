@@ -25,6 +25,7 @@ import math
 import pytest
 from panda3d.core import Vec3
 
+from app import editor as editor_mod
 from app.editor import (DRIVE_BOOST, HANDLE_STEP, PIECE_PICK_RADIUS_PX,
                         PORT_PICK_RADIUS_PX, SEAM_POSITION_TOL, ROTATE_STEP_DEG,
                         UNDO_LIMIT, TrackEditor)
@@ -575,14 +576,14 @@ def test_ctrl_s_asks_for_a_filename_then_saves_to_it(app, editor, tmp_path):
     send = app.messenger.send
 
     send("control-s")
-    assert editor._save_name_mode
+    assert editor._prompt == editor_mod.PROMPT_SAVE
 
     for key in ("m", "y", "2"):
         send(key)
-    assert editor._save_name_buffer == "my2"
+    assert editor._prompt_buffer == "my2"
 
     send("enter")
-    assert not editor._save_name_mode
+    assert editor._prompt is None
     assert editor.save_path == tmp_path / "my2.json"
     assert (tmp_path / "my2.json").exists()
     assert "my2.json" in editor._toast
@@ -598,7 +599,7 @@ def test_save_as_escape_cancels_without_writing(app, editor, tmp_path):
     send("control-s")
     send("a")
     send("escape")
-    assert not editor._save_name_mode
+    assert editor._prompt is None
     assert not (tmp_path / "a.json").exists()
     assert "取消" in editor._toast
 
@@ -613,7 +614,7 @@ def test_save_as_backspace_edits_the_buffer(app, editor):
     send("c")
     send("backspace")
     send("backspace")
-    assert editor._save_name_buffer == "a"
+    assert editor._prompt_buffer == "a"
 
 
 def test_save_as_empty_name_falls_back_to_the_current_path(app, editor, tmp_path):
@@ -624,7 +625,7 @@ def test_save_as_empty_name_falls_back_to_the_current_path(app, editor, tmp_path
 
     app.messenger.send("control-s")
     app.messenger.send("enter")
-    assert not editor._save_name_mode
+    assert editor._prompt is None
     assert editor.save_path == tmp_path / "layout.json"
     assert (tmp_path / "layout.json").exists()
 
@@ -632,11 +633,147 @@ def test_save_as_empty_name_falls_back_to_the_current_path(app, editor, tmp_path
 def test_save_as_rejects_names_with_illegal_characters(app, editor):
     editor.bind()
     editor.begin_save_as()
-    editor._save_name_buffer = "bad/name"
-    editor._confirm_save_as()
-    assert editor._save_name_mode, "非法文件名不应退出命名模式"
-    assert "非法" in editor._save_name_error
-    editor._exit_save_as()
+    editor._prompt_buffer = "bad/name"
+    editor._confirm_file_prompt()
+    assert editor._prompt == editor_mod.PROMPT_SAVE, "非法文件名不应退出命名模式"
+    assert "非法" in editor._prompt_error
+    editor._exit_file_prompt()
+
+
+# --------------------------------------------------------------------------- #
+# 读档填名字（Ctrl+O）
+# --------------------------------------------------------------------------- #
+
+def test_ctrl_o_asks_for_a_filename_then_loads_it(app, editor, tmp_path):
+    """Ctrl+O 也弹输入框：写下某个存档的名字，回车就读那一个。"""
+    piece = straight_piece(editor.catalog)
+    build_chain(editor, piece.id, 3)
+    editor.bind()
+    send = app.messenger.send
+
+    # 先造出一份命名存档
+    send("control-s")
+    for key in ("r", "o", "u", "t", "e", "1"):
+        send(key)
+    send("enter")
+    assert (tmp_path / "route1.json").exists()
+    saved = editor.layout.to_dict()
+
+    # 换一份布局（清空），再从输入框读回 route1
+    send("control-n")
+    assert len(editor.layout) == 0
+
+    send("control-o")
+    assert editor._prompt == editor_mod.PROMPT_LOAD
+    for key in ("r", "o", "u", "t", "e", "1"):
+        send(key)
+    send("enter")
+    assert editor._prompt is None
+    assert editor.save_path == tmp_path / "route1.json"
+    assert editor.layout.to_dict() == saved
+    assert "已载入" in editor._toast
+
+
+def test_open_prompt_lists_existing_saves(app, editor, tmp_path):
+    """读档提示条要把已有存档列出来，省得用户瞎猜名字。"""
+    (tmp_path / "alpha.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "beta.json").write_text("{}", encoding="utf-8")
+    editor.bind()
+    editor.begin_open_as()
+    text = editor._prompt_text()
+    assert "alpha" in text and "beta" in text
+    editor._exit_file_prompt()
+
+
+def test_open_prompt_caps_a_long_file_listing(app, editor, tmp_path):
+    """存档很多时名单要截断 —— 那一行字太长会把提示面板挤出屏幕。"""
+    for index in range(20):
+        (tmp_path / f"save{index:02d}.json").write_text("{}", encoding="utf-8")
+    editor.bind()
+    editor.begin_open_as()
+    listing = editor._prompt_files()
+    assert listing.endswith("…")
+    assert len(listing) <= 36 + 1
+    assert editor._prompt_files().count(" ") < 20
+    editor._exit_file_prompt()
+
+
+def test_save_prompt_is_a_single_line(app, editor, tmp_path):
+    """保存提示条只有一行；读档提示条是两行（名字 / 名单各一行）。"""
+    editor.bind()
+    editor.begin_save_as()
+    editor._name_append("a")
+    assert "\n" not in editor._prompt_text()
+    editor._exit_file_prompt()
+
+    editor.begin_open_as()
+    assert editor._prompt_text().count("\n") == 1
+    editor._exit_file_prompt()
+
+
+def test_open_prompt_rejects_a_missing_file_without_touching_the_layout(app, editor, tmp_path):
+    """写了个不存在的名字：留在输入框里报错，当前布局一动不动。"""
+    piece = straight_piece(editor.catalog)
+    build_chain(editor, piece.id, 2)
+    editor.bind()
+    before = editor.layout.to_dict()
+
+    editor.begin_open_as()
+    for key in ("n", "o", "p", "e"):
+        editor._name_append(key)
+    editor._confirm_file_prompt()
+    assert editor._prompt == editor_mod.PROMPT_LOAD, "文件不存在不该退出输入框"
+    assert "不存在" in editor._prompt_error
+    assert editor.layout.to_dict() == before
+
+    editor._exit_file_prompt()
+    assert editor._prompt is None
+
+
+def test_open_prompt_empty_name_loads_the_current_path(app, editor, tmp_path):
+    """不输名字直接回车 = 读回当前 ``save_path``（快速读档）。"""
+    piece = straight_piece(editor.catalog)
+    build_chain(editor, piece.id, 2)
+    editor.bind()
+
+    app.messenger.send("control-s")
+    app.messenger.send("enter")
+    saved = editor.layout.to_dict()
+
+    asset = editor.save_path
+    editor.clear()
+    assert len(editor.layout) == 0
+
+    app.messenger.send("control-o")
+    app.messenger.send("enter")
+    assert editor.save_path == asset
+    assert editor.layout.to_dict() == saved
+
+
+def test_open_prompt_blocks_editor_shortcuts_while_typing(app, editor, tmp_path):
+    """填名模式里按 ``n`` 是打字，不该顺手召唤列车。"""
+    piece = straight_piece(editor.catalog)
+    build_chain(editor, piece.id, 2)
+    editor.bind()
+
+    app.messenger.send("control-o")
+    app.messenger.send("n")
+    assert editor._prompt_buffer == "n"
+    assert editor.train_view is None
+    editor._exit_file_prompt()
+
+
+def test_prompt_hides_the_bottom_panels(app, editor, tmp_path):
+    """填文件名时，底部的「帮助」面板让位 —— 提示条那一行才长得下。"""
+    editor.bind()
+    editor.begin_open_as()
+    editor.tick()
+    assert editor.hud.texts["help"] == ""
+    assert "读档" in editor.hud.texts["toast"]
+
+    editor._exit_file_prompt()
+    editor.tick()
+    assert editor.hud.texts["help"] == editor_mod.HELP_TEXT
 
 
 # --------------------------------------------------------------------------- #

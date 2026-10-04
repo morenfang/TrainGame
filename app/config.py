@@ -25,12 +25,16 @@ DEFAULT_HEIGHT = 900
 
 
 def configure_engine(*, width: int = DEFAULT_WIDTH, height: int = DEFAULT_HEIGHT,
-                     offscreen: bool = False, vsync: bool = True) -> None:
+                     offscreen: bool = False, vsync: bool = True,
+                     audio: bool = True) -> None:
     """装载 PRC 设置。必须在 ``ShowBase()`` 之前调用，且只调用一次。"""
     # 世界坐标：+Y 向上、地面为 XZ 平面，与 core 完全一致。
     loadPrcFileData("", "coordinate-system yup")
     loadPrcFileData("", f"win-size {width} {height}")
-    loadPrcFileData("", "audio-library-name null")
+    # 窗口模式保留默认音频库（OpenAL，列车音效用）；离屏 / 测试显式关成 null。
+    # 不写 "openal" —— 那会被当成动态库名（libopenal.so）去找，反而加载失败。
+    if not (audio and not offscreen):
+        loadPrcFileData("", "audio-library-name null")
     loadPrcFileData("", "sync-video " + ("true" if vsync else "false"))
     # 关掉与画面无关的通知，免得盖住我们自己的日志；出错仍会显示。
     loadPrcFileData("", "notify-level-display error")

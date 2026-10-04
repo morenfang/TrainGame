@@ -40,6 +40,7 @@ from core.train.consist import TrainCatalog, TrainSpec
 from core.train.dynamics import Train
 from render import scenery as scenery_mod
 from render import style
+from render.audio import TrainAudio
 from render.camera import OrbitCamera
 from render.overlay import build_footprint_marker, tint
 from render.scene import LayoutView
@@ -60,11 +61,17 @@ CLICK_SLOP_PX = 5.0
 #: 单独列出来是因为它们要同时挂 "按下" 和 "抬起" 两个事件。
 HELD_KEYS = ("w", "a", "s", "d", "q", "e")
 
-#: Ctrl+S 进入"填写文件名"模式后可输入的字符（小写字母 + 数字）。
+#: 弹出文件名输入框（Ctrl+S / Ctrl+O）后可输入的字符（小写字母 + 数字）。
 #: 按键事件名就是字符本身（见 ``key_actions`` 里关于符号键的说明）。
 _SAVE_NAME_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789"
 #: 文件名长度上限（字符数）。
 _SAVE_NAME_MAX = 40
+#: 读档提示条里"已有存档"名单的总字符预算（超出就截断成 "…"）。
+#: 提示条是一行居中文字，名单太长会把面板挤出屏幕。
+_PROMPT_LIST_CHARS = 36
+#: 提示条里回显的目标文件名最多显示几个字符（超出掐尾加 "…"）。
+#: 掐了也不影响读档 —— 输入框里那一串才是用户真正写的名字。
+_PROMPT_ECHO_MAX = 22
 
 #: 鼠标两种模式：**放置轨道**（左键放件、选中）与**视角**（左键拖拽转视角）。
 #:
@@ -76,6 +83,11 @@ MODE_VIEW = "view"
 #: 按 B 进出。与「放置轨道」「视角」并列 —— 布景不参与走线，所以它不能复用
 #: 轨道那套「吸附到端口」的逻辑，而是直接把物件摆到鼠标指着的地面上。
 MODE_SCENERY = "scenery"
+
+#: 文件名输入框的两种用途：Ctrl+S 另存、Ctrl+O 读档。
+#: 两者共用同一个输入框，只是回车之后的动作不同（见 :meth:`TrackEditor._confirm_file_prompt`）。
+PROMPT_SAVE = "save"
+PROMPT_LOAD = "load"
 
 #: 布景模式里的分类（按 ``,`` / ``.`` 切换）。
 SCENERY_CATEGORIES = ("building", "station", "mountain", "tree")
@@ -156,11 +168,11 @@ HELP_TEXT = (
     "V 放置/视角切换  左键 放轨或拖视角  右键 环绕  中键 平移  滚轮 缩放\n"
     "R 旋转  T 换接驳端口  C 一键闭合  U 扳道岔  X 只删鼠标下这一节\n"
     ", . 换分类（直轨/曲线/坡道/高架桥/交叉/道岔）  [ ] 换同类里下一件\n"
-    "1-9 直选第 n 件  退格 撤销  Ctrl+S 另存为  Ctrl+O 读档\n"
+    "1-9 直选第 n 件  退格 撤销  Ctrl+S 另存  Ctrl+O 读档（都可填名字）\n"
     "W A S D 平移视角  Q E 转向  F 取景\n"
     "B 布景模式（, . 换分类  [ ] 换件  1-9 直选  左键放  X 删  R 转）\n"
     "N 召唤列车（自动切到视角）  M 收起  ↑ 牵引  ↓ 制动  空格 惰行\n"
-    "K 换向（先急刹再反向加速）  Shift+空格 急停\n"
+    "K 换向（先急刹再反向加速）  J 鸣笛  Shift+空格 急停\n"
     "拼环：按 . 到「曲线」挑弧度，几节后按 C 补完"
 )
 
@@ -258,12 +270,13 @@ class TrackEditor:
 
         #: 存档所在的目录（Ctrl+S 填文件名时，保存到 ``<该目录>/<名字>.json``）。
         self._save_dir = self.save_path.parent
-        #: Ctrl+S 之后的"填写文件名"模式：置真时键盘只喂给文件名输入框。
-        self._save_name_mode = False
+        #: 文件名输入框当前开着没；开着时值是用途（:data:`PROMPT_SAVE` /
+        #: :data:`PROMPT_LOAD`），关着时是 ``None``。键盘也只喂给这个输入框。
+        self._prompt: str | None = None
         #: 文件名输入框当前的内容。
-        self._save_name_buffer = ""
+        self._prompt_buffer = ""
         #: 文件名校验失败时的一句话（显示在提示里）。
-        self._save_name_error = ""
+        self._prompt_error = ""
 
         #: 左键现在是"放轨道"还是"拖视角"（见 :data:`MODE_BUILD` / :data:`MODE_VIEW`）。
         self.mode = MODE_BUILD
@@ -292,6 +305,9 @@ class TrackEditor:
         #: 悬停高亮：一件半透明的占地轮廓（房 / 车站是矩形，山 / 树是圆）。
         self._scenery_highlight = base.render.attachNewNode("scenery_highlight")
         self._rebuild_scenery()
+
+        #: 列车音效（行驶声 / 轮轨声随车速变速 + 鸣笛）。null 音频下自动退化为空壳。
+        self.audio = TrainAudio(base)
 
     # ==================================================================== #
     # 当前选中的件
@@ -1210,17 +1226,30 @@ class TrackEditor:
     # ---------------------------------------------------------------- 存档命名
 
     def begin_save_as(self) -> None:
-        """Ctrl+S：进入"填写文件名"模式。
+        """Ctrl+S：进入"填写文件名"模式，把布局存到 ``saves/<名字>.json``。
 
         之后键盘的字母 / 数字键喂进一个输入框（编辑器自己的快捷键暂时让位），
-        回车 = 保存到 ``saves/<名字>.json``，退格删字，Esc 取消。不输入名字直接
-        回车，就存回当前的 ``save_path``（和原来一样"固定文件名"的快速保存）。
+        回车 = 保存，退格删字，Esc 取消。不输入名字直接回车，就存回当前的
+        ``save_path``（和原来一样"固定文件名"的快速保存）。
         """
-        if self._save_name_mode:
+        self._begin_file_prompt(PROMPT_SAVE)
+
+    def begin_open_as(self) -> None:
+        """Ctrl+O：进入"填写文件名"模式，从 ``saves/<名字>.json`` 读档。
+
+        和 Ctrl+S 共用同一个输入框，提示里会把 ``saves`` 目录下**已有哪些存档**
+        列出来。空名字直接回车 = 读回当前 ``save_path``（快速读档）；写了名字但
+        文件不存在则留在输入框里报错，不会去动当前布局。
+        """
+        self._begin_file_prompt(PROMPT_LOAD)
+
+    def _begin_file_prompt(self, purpose: str) -> None:
+        """打开文件名输入框。``purpose`` 决定回车之后是保存还是读档。"""
+        if self._prompt is not None:
             return
-        self._save_name_mode = True
-        self._save_name_buffer = ""
-        self._save_name_error = ""
+        self._prompt = purpose
+        self._prompt_buffer = ""
+        self._prompt_error = ""
         self._held.clear()
         # 暂时让编辑器的快捷键全部闭嘴，只留文件名输入
         for event in self.bound_key_names():
@@ -1228,12 +1257,12 @@ class TrackEditor:
         for char in _SAVE_NAME_CHARS:
             self.base.accept(char, self._name_append, [char])
         self.base.accept("backspace", self._name_backspace)
-        self.base.accept("enter", self._confirm_save_as)
-        self.base.accept("escape", self._cancel_save_as)
+        self.base.accept("enter", self._confirm_file_prompt)
+        self.base.accept("escape", self._cancel_file_prompt)
 
-    def _exit_save_as(self) -> None:
+    def _exit_file_prompt(self) -> None:
         """退出命名模式，恢复全套编辑器快捷键。"""
-        self._save_name_mode = False
+        self._prompt = None
         for char in _SAVE_NAME_CHARS:
             self.base.ignore(char)
         self.base.ignore("backspace")
@@ -1242,42 +1271,95 @@ class TrackEditor:
         self.bind()
 
     def _name_append(self, char: str) -> None:
-        if len(self._save_name_buffer) < _SAVE_NAME_MAX:
-            self._save_name_buffer += char
-            self._save_name_error = ""
+        if len(self._prompt_buffer) < _SAVE_NAME_MAX:
+            self._prompt_buffer += char
+            self._prompt_error = ""
 
     def _name_backspace(self) -> None:
-        self._save_name_buffer = self._save_name_buffer[:-1]
-        self._save_name_error = ""
+        self._prompt_buffer = self._prompt_buffer[:-1]
+        self._prompt_error = ""
 
-    def _cancel_save_as(self) -> None:
-        self._exit_save_as()
-        self.notify("已取消保存")
+    def _cancel_file_prompt(self) -> None:
+        self._exit_file_prompt()
+        self.notify("已取消")
 
-    def _confirm_save_as(self) -> None:
-        name = self._save_name_buffer.strip()
+    def _prompt_target(self) -> Path:
+        """输入框里的名字解析成的目标路径；空名字回落到当前 ``save_path``。"""
+        name = self._prompt_buffer.strip()
+        if not name:
+            return self.save_path
+        if not name.lower().endswith(".json"):
+            name += ".json"
+        return self._save_dir / name
+
+    def _prompt_target_label(self) -> str:
+        """提示条里回显的目标：目录内只写文件名，超长就掐尾加 "…"。
+
+        必须**有界**：提示条是一行居中文字，把一长串路径照抄上去会顶出屏幕
+        （输入框本身已限 40 字符，回显再带上目录就更长了）。
+        """
+        target = self._prompt_target()
+        label = target.name if target.parent == self._save_dir else str(target)
+        if len(label) > _PROMPT_ECHO_MAX:
+            label = label[: _PROMPT_ECHO_MAX - 1] + "…"
+        return label
+
+    def _prompt_files(self) -> str:
+        """``saves`` 目录里已有存档的名字，拼成一行（总量受字符预算限制）。
+
+        名字按字典序，超出 :data:`_PROMPT_LIST_CHARS` 就截断并以 ``…`` 收尾 ——
+        提示条一行字太长，面板会被挤出屏幕。
+        """
+        try:
+            names = sorted(path.stem for path in self._save_dir.glob("*.json"))
+        except OSError:
+            return ""
+        shown: list[str] = []
+        used = 0
+        for name in names:
+            if used + len(name) > _PROMPT_LIST_CHARS:
+                shown.append("…")
+                break
+            shown.append(name)
+            used += len(name) + 1
+        return " ".join(shown)
+
+    def _confirm_file_prompt(self) -> None:
+        """回车：按当前用途保存 / 读档。名字非法或文件不存在就留在输入框报错。"""
+        name = self._prompt_buffer.strip()
         if name:
             if name in (".", "..") or any(ch in name for ch in '/\\:*?"<>|'):
-                self._save_name_error = "　（文件名含非法字符）"
+                self._prompt_error = "　（文件名含非法字符）"
                 return
-            if not name.lower().endswith(".json"):
-                name += ".json"
-            self.save_path = self._save_dir / name
-        self._exit_save_as()
-        self.save()
-
-    def _name_prompt(self) -> str:
-        """命名模式下底部提示条的内容（含实时输入框与目标路径）。"""
-        name = self._save_name_buffer
-        if name.strip():
-            target = self._save_dir / (
-                name.strip() if name.strip().lower().endswith(".json")
-                else name.strip() + ".json"
-            )
+            target = self._prompt_target()
+            if self._prompt == PROMPT_LOAD and not target.exists():
+                self._prompt_error = "　（这个文件不存在）"
+                return
+            self.save_path = target
+        purpose = self._prompt
+        self._exit_file_prompt()
+        if purpose == PROMPT_LOAD:
+            self.load()
         else:
-            target = self.save_path
-        return (f"保存文件名：{name}|　回车 = 存到 {target}　"
-                f"（退格删字，Esc 取消）{self._save_name_error}")
+            self.save()
+
+    def _prompt_text(self) -> str:
+        """底部提示条：输入框 + 目标；读档时另起一行列出已有存档。
+
+        刻意写得**短**：提示条是"底部居中"的一行字，宽度受中间那一列限制，
+        太长就会从左右两块面板底下穿过去。所以目标路径只回显截断后的文件名
+        （见 :meth:`_prompt_target_label`），名单另起一行并另有字符预算。
+        """
+        buffer = self._prompt_buffer
+        label = self._prompt_target_label()
+        if self._prompt == PROMPT_LOAD:
+            head = (f"读档  {buffer}▏　回车 读 {label}"
+                    f"　Esc 取消{self._prompt_error}")
+            listing = self._prompt_files()
+            tail = f"已有：{listing}" if listing else "（这个目录里还没有存档）"
+            return f"{head}\n{tail}"
+        return (f"保存  {buffer}▏　回车 存到 {label}"
+                f"　Esc 取消{self._prompt_error}")
 
     def load(self) -> bool:
         try:
@@ -1386,6 +1468,7 @@ class TrackEditor:
         view.set_handle(self.train_handle)
         self.train_view = view
         view.sync(self.view.path, self.layout)
+        self.audio.start()
 
         # 加载列车 = 要开车看车了，左键自动从"放轨道"切到"拖视角"，
         # 免得鼠标一动就把轨道甩进场景（用户按 V 可随时切回来）。
@@ -1407,6 +1490,7 @@ class TrackEditor:
             return
         self.train_view.destroy()
         self.train_view = None
+        self.audio.stop()
         self.notify("列车已下轨")
 
     def push_train_handle(self, step: float = HANDLE_STEP) -> float | None:
@@ -1452,6 +1536,13 @@ class TrackEditor:
         self.train_handle = 1.0
         self.notify("换向：快速刹停 → 反向加速")
 
+    def horn_train(self) -> None:
+        """鸣笛：只有列车在线时才响。"""
+        if self.train_view is None:
+            self.notify("先按 N 召唤一列列车")
+            return
+        self.audio.horn()
+
     def handle_label(self) -> str:
         """手柄的一句话说明（HUD 与提示共用）。"""
         if self.train_view is not None and self.train_view.train.is_emergency:
@@ -1478,12 +1569,14 @@ class TrackEditor:
         if components != 1:
             self.train_view.destroy()
             self.train_view = None
+            self.audio.stop()
             if components == 0:
                 self.notify("轨道清空了，列车下轨")
             else:
                 self.notify("轨道断成了几段，列车下轨 —— 接起来后再按 N")
             return
         self.train_view.advance(dt, self.view.path, self.layout)
+        self.audio.update(self.train_view.speed_kmh(), self.train_handle)
 
     def _resync_train(self) -> None:
         """布局被整体换掉（撤销 / 读档）后让列车重新上线。"""
@@ -1614,7 +1707,7 @@ class TrackEditor:
         self._last_mouse = current
 
     def _apply_held_keys(self, dt: float) -> None:
-        if self._save_name_mode:
+        if self._prompt is not None:
             return                      # 命名模式下相机不该被 WASDQE 拖动
         if not self._held:
             return
@@ -1632,6 +1725,10 @@ class TrackEditor:
     def _refresh_hud(self) -> None:
         if self.hud is None:
             return
+
+        # 填文件名时是**模态**的：底部那两块（帮助 / 列车）让位，好让提示条
+        # 这一行长得下 —— 提示条是"底部居中"的一行字，宽度受中间那一列限制。
+        prompting = self._prompt is not None
 
         if self.placing_scenery:
             placed = sum(1 for _ in scenery_mod.placeable_items(self.user_scenery))
@@ -1698,10 +1795,9 @@ class TrackEditor:
         lines.append(f"鼠标下：{cursor}")
         self.hud.set_text("status", "\n".join(lines))
 
-        self.hud.set_text("help", HELP_TEXT)
-        self.hud.set_text("train", self._train_hud_text())
-        self.hud.set_text("toast", self._name_prompt() if self._save_name_mode
-                          else self._toast)
+        self.hud.set_text("help", "" if prompting else HELP_TEXT)
+        self.hud.set_text("train", "" if prompting else self._train_hud_text())
+        self.hud.set_text("toast", self._prompt_text() if prompting else self._toast)
 
     def _train_hud_text(self) -> str:
         """右下角那块"列车"面板的文本。空字符串 = 整块隐藏。"""
@@ -1781,6 +1877,7 @@ class TrackEditor:
             "n": lambda: self.spawn_train(1),
             "m": self.dismiss_train,
             "k": self.reverse_train_direction,
+            "j": self.horn_train,
             "arrow_up": lambda: self.push_train_handle(HANDLE_STEP),
             "arrow_down": lambda: self.push_train_handle(-HANDLE_STEP),
             "space": self.release_train_handle,
@@ -1793,7 +1890,7 @@ class TrackEditor:
             ".": lambda: self._cycle_category_action(1),
             "v": self.toggle_mode,
             "control-s": self.begin_save_as,
-            "control-o": self.load,
+            "control-o": self.begin_open_as,
             "control-n": self.clear,
             "control-z": self.undo,
             "control-y": self.redo,
@@ -1804,7 +1901,7 @@ class TrackEditor:
         names = list(self.key_actions())
         names += [str(index) for index in range(1, 10)]
         names += list(HELD_KEYS) + [f"{key}-up" for key in HELD_KEYS]
-        names += list(_SAVE_NAME_CHARS)      # 文件名输入的字符键（Ctrl+S 之后）
+        names += list(_SAVE_NAME_CHARS)      # 文件名输入的字符键（Ctrl+S / Ctrl+O 之后）
         return names
 
     def bind(self) -> None:
@@ -1825,7 +1922,7 @@ class TrackEditor:
             accept(f"{key}-up", self._held.discard, [key])
 
     def _on_press(self) -> None:
-        if self._save_name_mode:
+        if self._prompt is not None:
             return
         self._press_mouse = self._mouse()
         self._press_moved = 0.0
@@ -1835,7 +1932,7 @@ class TrackEditor:
             self._left_orbiting = True
 
     def _on_release(self) -> None:
-        if self._save_name_mode:
+        if self._prompt is not None:
             return
         # 拖动过就不算点击，避免"环绕视角时顺手放下一节轨道"。
         # 视角模式下左键根本不放置，只有放置 / 布景模式才认这一次点击。
