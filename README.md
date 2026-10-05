@@ -44,6 +44,8 @@ run.bat --help                       # 全部命令行参数
 
 ## 打包成 exe（免装 Python）
 
+**不想装环境？** 直接下 [最新 Release](https://github.com/morenfang/TrainGame/releases/latest) 里的 `TrainGame.exe`
+（42 MB，双击即玩；同一个 Release 里还挂了操作手册 PDF 和 10 个现成场景存档）。想要自己打，
 一条命令产出**单文件** Windows 程序（自带 Python、Panda3D 与件库数据）：
 
 ```powershell
