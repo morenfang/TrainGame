@@ -8,7 +8,9 @@
 
 from __future__ import annotations
 
+import json
 import math
+from pathlib import Path
 
 import pytest
 
@@ -111,6 +113,123 @@ def test_detect_closure_finds_the_loop_without_a_hint(catalog):
     report, path = detect_closure(layout)
     assert report.closed
     assert path is not None and len(path) == 8
+
+
+# --------------------------------------------------------------------------- #
+# 「看不见的缝」：首尾严丝合缝、但没 connect()
+#
+# 回归自实盘存档 saves/layout.json（38 件，首尾端口 39/b 与 40/b 相距 1.2e-13 m，
+# seams 却是空的）。老版本的判据是"必须回到同一个端口"，于是这条链被当成开链，
+# 列车开到头就停在缝上：HUD 报"缺口 0.0000 m"、轨道看上去完全连续，用户看到的
+# 就是"车卡在 #40 和 #39 之间不动"。
+# --------------------------------------------------------------------------- #
+
+def build_unwelded_circle(catalog: Catalog, pieces: int = 8):
+    """拼一个整圆，但**不焊**最后那道缝 —— 首尾端口对齐、连接表里却没有边。
+
+    8 节 45° 正好 360°，末端落回起点，误差在 float64 噪声量级（1e-13 m），
+    与"真闭环"同一量级 —— 所以只能靠容差判据认出来。
+    """
+    layout = Layout(catalog=catalog)
+    first = layout.add_root("curve_r40_l45")
+    index = first
+    for _ in range(pieces - 1):
+        index = layout.attach("curve_r40_l45", "a", (index, "b"))
+    return layout, first
+
+
+def test_unwelded_ring_is_still_traced_as_a_loop(catalog):
+    """首尾严丝合缝的链必须当环走 —— 否则列车会停在看不见的缝上。"""
+    layout, first = build_unwelded_circle(catalog)
+    # 前提：确实没焊，而且确实严丝合缝（两道缝都在，只是没连）
+    assert len(layout) == 8
+    assert layout.free_ports() == [(first, "a"), (first + 7, "b")]
+    pair, (distance, heading_gap) = layout.closest_free_pair()
+    assert distance < 1e-12 and heading_gap < 1e-12
+
+    path = trace(layout, (first, "a"))
+    assert path.closed, "首尾严丝合缝的链没被认成环 —— 列车会停在缝上"
+    assert path.termination == "closed"
+    assert len(path) == 8
+    assert path.total_length == pytest.approx(2 * math.pi * RADIUS, rel=1e-12)
+    # 闭环的判据是几何，不是端口表：走线不能顺手改拓扑
+    assert layout.free_ports() == [(first, "a"), (first + 7, "b")]
+
+
+def test_unwelded_ring_is_drivable_by_a_train(catalog):
+    """闭环判据的最终目的：列车能一直跑下去，而不是停在缝上。"""
+    from core.train.consist import TrainCatalog
+    from core.train.dynamics import TrainState, step
+
+    layout, _first = build_unwelded_circle(catalog)
+    report, path = detect_closure(layout, allow_open=True)
+    assert report.closed and path is not None and path.closed
+
+    spec = TrainCatalog.builtin()["green_skin_10"]
+    state = TrainState(s=spec.total_length, v=0.0, throttle=1.0, brake=0.0,
+                       direction=1.0)
+    for _ in range(3000):                      # 300 s，足够绕好几圈
+        step(state, spec, 0.1, total_length=path.total_length,
+             closed=path.closed, direction=state.direction)
+    assert state.v > 1.0, "列车在缝上停下了"
+    assert state.distance > path.total_length, "列车没绕过一圈"
+
+
+def test_an_open_chain_whose_gap_is_real_is_still_not_a_loop(catalog):
+    """容差不能把"没铺完的线"也认成环 —— 少一节的圆环缺口是米级的。
+
+    这是上面那条判据的安全边界：真闭环误差 1e-13 m，而 45° 的圆环少一节差
+    **30.615 m**（22.5° 的圆环接一半差 80 m = 直径），中间隔着十几个数量级，
+    所以 1e-6 m 的判据不可能误判。
+    """
+    layout, first = build_unwelded_circle(catalog, pieces=7)
+    path = trace(layout, (first, "a"))
+    assert not path.closed
+    assert path.termination == "open_end"
+    report, _ = detect_closure(layout, allow_open=True)
+    assert not report.closed
+    # 缺口正好是缺那 45° 弧对应的弦长 —— 与 1e-6 m 的判据差着七个数量级
+    assert report.gap_distance == pytest.approx(
+        2 * RADIUS * math.sin(DEG(45.0) / 2), rel=1e-9)
+    assert abs(report.gap_heading) == pytest.approx(DEG(45.0), rel=1e-9)
+
+
+def test_the_reported_stall_in_layout_json_is_gone(catalog):
+    """**用户报的那个 #40 → #39 卡死**：直接拿实盘存档回归。
+
+    ``saves/layout.json`` 是 38 件的一条链，首尾端口 ``39/b`` 与 ``40/b`` 相距
+    1.2e-13 m（严丝合缝），可是 ``seams`` 是空的 —— 用户没按 C。老版本走线只认
+    端口表，于是把它当成开链：列车跑满 1748.32 m 后停在缝上，HUD 还报"缺口
+    0.0000 m"，看起来就是轨道明明接上了车却卡住。
+
+    这里直接吃那份存档（不是合成布局），因为它就是出问题的那份数据。
+    """
+    save = Path(__file__).resolve().parent.parent / "saves" / "layout.json"
+    if not save.exists():
+        pytest.skip(f"示例存档不在：{save}")
+
+    layout = Layout.from_dict(
+        json.loads(save.read_text(encoding="utf-8")), catalog)
+    assert len(layout) == 38
+    assert layout.to_dict()["seams"] == [], "这份存档本来就没焊过缝"
+    assert layout.free_ports() == [(39, "b"), (40, "b")]
+
+    report, path = detect_closure(layout, allow_open=True)
+    assert report.closed, f"#40→#39 那道缝没被认出来：{report.describe()}"
+    assert path is not None and path.closed
+
+    # 列车必须绕得下去，而不是跑满一圈就停在缝上
+    from core.train.consist import TrainCatalog
+    from core.train.dynamics import TrainState, step
+
+    spec = TrainCatalog.builtin()["green_skin_10"]
+    state = TrainState(s=spec.total_length, v=0.0, throttle=1.0, brake=0.0,
+                       direction=1.0)
+    for _ in range(6000):                      # 600 s ≈ 好几圈
+        step(state, spec, 0.1, total_length=path.total_length,
+             closed=path.closed, direction=state.direction)
+    assert state.v > 1.0, "列车还是停在了 #40→#39 的缝上"
+    assert state.distance > 2.0 * path.total_length
 
 
 def test_unfinished_loop_reports_a_metre_scale_gap(catalog):
@@ -353,9 +472,17 @@ def test_a_loop_closes_through_the_turnout_diverging_leg(catalog):
     for _ in range(14):
         index = layout.attach("curve_r40_l22_5", "a", (index, "b"))
 
-    # 先确认这条测试测得到东西：没接上最后一节时确实不闭环
-    report, _ = detect_closure(layout)
-    assert not report.closed
+    # 先确认这条测试测得到东西：岔股那一圈在**几何上**必须正好合拢，也就是
+    # 还没 connect() 时首尾就已经严丝合缝，只差连接表里的那一条边。
+    # （老数据里岔股半径 ≈ 101.86 m，这里就会差一大截 —— 这正是"没有合适长度的
+    #   铁轨能对接"那个抱怨的根。）
+    assert layout.free_ports() == [(turnout, "a"), (turnout, "b"), (index, "b")]
+    # 岔股那一圈的缺口：只剩 (turnout, "a") ↔ (index, "b") 这一对，且严丝合缝
+    pair, (distance, heading_gap) = layout.closest_free_pair()
+    assert pair == ((turnout, "a"), (index, "b"))
+    assert distance < 1e-9 and heading_gap < 1e-9, (
+        f"岔股 + 15 节 22.5° 应当正好绕满一圈，实测缺口 {distance:.3f} m"
+    )
 
     # 接上：岔股的出口正好落在起点上，所以这一步必须**几何上成立**（老数据会抛错）
     layout.connect((index, "b"), (turnout, "a"))

@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pytest
 from panda3d.core import Vec3
@@ -1010,6 +1011,40 @@ def test_a_train_can_run_on_a_loop_that_has_a_spare_branch(app, editor):
     assert view.state.distance > 1.0
 
 
+def test_the_reported_layout_json_stall_is_gone_in_the_real_editor(app, editor):
+    """**实盘回归（编辑器全栈）**：读 saves/layout.json → 召唤列车 → 加手柄。
+
+    这份存档 38 件、首尾端口相距 1.2e-13 m（严丝合缝）却从没焊过缝。老版本里
+    ``TrainView`` 把路径当开链，``head_range`` 只给 ``[编组全长, 总长]`` 这一小段，
+    列车跑满 1748.32 m 后就被钉死在 #40→#39 的缝上（HUD 还报"缺口 0.0000 m"，
+    看上去轨道是连续的）。这里走的是用户那条路：读档 → 上车 → 推手柄。
+    """
+    save = Path(__file__).resolve().parent.parent / "saves" / "layout.json"
+    if not save.exists():
+        pytest.skip(f"示例存档不在：{save}")
+
+    editor.save_path = save
+    assert editor.load()
+    assert editor.view.closure is not None and editor.view.closure.closed
+    total = editor.view.path.total_length
+
+    view = editor.spawn_train(1)
+    assert view is not None and view.visible, view.placement_error
+    editor.push_train_handle(1.0)
+
+    # 直接把列车搬到**缝口前 5 m**并给一个初速 —— 老版本就是在这里被钉死的：
+    # 开链路径只给 [编组全长, 总长] 这一小段，列车冲到 s == 总长 就 v = 0 不动了。
+    view.state.s = total - 5.0
+    view.state.v = 20.0
+    editor._advance_train(1.0 / 60.0)
+    for _ in range(60):                        # 1 秒 × 20 m/s，够跨过那 5 m
+        editor._advance_train(1.0 / 60.0)
+
+    assert view.visible, view.placement_error
+    assert view.state.v > 1.0, "列车在 #40→#39 的缝上停下了"
+    assert view.state.s < total - 5.0, "没跨过那道缝（还是被开链限位钉住了）"
+
+
 def test_close_loop_keeps_working_after_a_spare_branch_is_attached(app, editor):
     """侧股上接了东西之后，环还在那儿，而且环**不包含**那条支线。"""
     turnout, tail = build_loop_with_a_spare_switch_branch(editor)
@@ -1022,10 +1057,16 @@ def test_close_loop_keeps_working_after_a_spare_branch_is_attached(app, editor):
     assert closure is not None and closure.closed
     assert closure.visit_count == before - 1, "环不该把侧股那条支线也算进去"
     assert editor.layout.free_ports() == [(spare, "b")]
+    assert editor.layout.closing_seam_ports(), "按 C 应当真的焊上一道缝"
 
     editor.undo()
-    assert editor.view.closure is None or not editor.view.closure.closed
     assert len(editor.layout) == before
+    # 撤销掉的是**那道缝**（连接表里的边），不是几何：首尾依旧严丝合缝，所以它
+    # 仍然是一条能跑车的环 —— 见 core.track.path 模块文档结论 2。所以要验的是
+    # "缝没了"，而不是"不闭环了"（后者是旧判据的副作用）。
+    assert editor.layout.closing_seam_ports() == []
+    assert editor.view.closure is not None and editor.view.closure.closed
+    assert editor.view.closure.gap_distance < 1e-9
 
 
 def test_the_hint_reaches_the_hud(app, editor):

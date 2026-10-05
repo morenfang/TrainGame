@@ -1764,6 +1764,12 @@ class TrackEditor:
             loop = (f"闭环成立  {closure.visit_count} 段 / "
                     f"{closure.total_length:.2f} m   接缝误差 "
                     f"{closure.gap_distance * 1000:.6f} mm")
+            # 首尾严丝合缝但没 connect() 的环：列车**现在就能跑**（见
+            # core.track.path 模块文档结论 2），但存档里没有那道缝 —— 以后接着往
+            # 这条链上加件时它会重新变成开链。所以这里必须留着 C 的出路：只说
+            # "闭环成立"的话，用户就没有任何理由去按 C，也就永远不知道还有这回事。
+            if self.seam_is_aligned():
+                loop += "\n接缝已对齐但没焊死 —— 按 C 把它固定进存档"
         else:
             hint = ""
             if self.seam_is_aligned():
