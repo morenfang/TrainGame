@@ -7,24 +7,30 @@
 临时 WAV、交给 Panda3D 的音频管理器循环播放，既不用管版权、也不受"音源在哪"
 这类外部依赖拖累。同一个种子每次合成出来的波形逐样本一致，因此可测、可复现。
 
-两种声音
+两种行驶声 + 一支风笛
 ------------------------------------------------
-* **行驶声**（循环）：一段"引擎" —— 低沉的牵引谐波堆 + 宽频轰鸣。播放速率与音量
-  随车速升高，于是"越快越响、音调越高"。
+* **引擎声**（循环）：一段低沉的牵引谐波堆 + 宽频轰鸣。播放速率与音量随车速升高，
+  于是"越快越响、音调越高"。
+* **轮轨滚动声**（循环）：**连续**的低频"沙沙"，只在动起来之后出声、随车速变响变亮。
 * **风笛**（单次）：按 ``J`` 触发。刻意做成又低又厚的气笛，不是汽车喇叭。
 
-为什么**没有**"嘀嘀"声
+"哐当"和"嘀嘀"是两回事，别再把前者加回来
 ------------------------------------------------
-曾经有两处会听成电子提示音，现在都拿掉了：
+用户说过"不要嘀嘀声，只要引擎声"，之后又补了一句"轮轨声可以回来，但不能像打点"。
+这两句话合起来要求的是**把瞬态拿掉、把连续性留住**，所以：
 
-* **轮轨撞击声**：每 0.5 s 两声"哐当"，一提速就变成密集的嗒嗒嗒 —— 正好是
-  "嘀嘀嘀"的听感。它已经删掉，行驶声音轨只剩引擎。
-* **行驶声里的快速颤音与孤立纯音**：旧版在 46 Hz 的谐波堆上叠了 380 / 570 Hz
-  两条纯正弦，还加了 6 Hz、深度 28% 的振幅调制。孤立纯音本身就"像提示音"，
-  而每秒六下的振幅调制听起来就是**蜂鸣**而不是引擎。新版改用"整数倍频的谐波
-  堆 + 多频点低通轰鸣"，只有一段 1 Hz、深度 5% 的缓慢起伏（那是呼吸，不是
-  打点）。:func:`tests.test_audio.test_motor_wave_is_not_a_buzzer` 会把这条
-  听感固化成断言，免得以后又被加回来。
+* **删掉的是"撞击"**：旧版轮轨声在 0.5 s 里放两声"哐当"，每次撞击都是一个瞬态
+  尖峰；速度一快，撞击间隔缩短，听起来就是密集的嗒嗒嗒 —— 那正是"嘀嘀"的第二个
+  来源。它**不该回来**，因为问题不在音量、在波形形状。
+* **加回来的是"滚动"**：新的轮轨声是一段**没有瞬态的连续底噪**（低频滚动 + 一丝
+  轮缘摩擦）。它没有可以加密的"点"，所以快放只会变亮变响，不会变出一串打点。
+
+另外两处旧版会听成电子提示音的地方也一并处理了：引擎声里曾经叠了 380 / 570 Hz
+两条孤立纯正弦，以及一个 6 Hz、深度 28% 的颤音（每秒六下的振幅调制 = 嗡鸣）。
+新版改用"整数倍频的谐波堆 + 多频点低通轰鸣"，只留一段 1 Hz、深度 5% 的缓慢起伏
+（那是呼吸，不是打点）。`tests/test_audio.py` 把这两条听感都钉成了断言，并且每条
+断言都配一个**故意做坏的对照样本**（旧版颤音 / 撞击声）来校验判据本身有效 ——
+控制组必须被判超标，被测波形必须远低于它。
 
 频谱包络还有一个副产品：谐波堆是"音调感"的来源，播放速率一变，整段频谱跟着
 平移，所以调速时听起来像在加速换挡，而不是把录音快放。
@@ -50,7 +56,9 @@ _RATE = 44100
 #: 合成结果的**修订号**：WAV 直接落在临时目录里按文件名复用，改了波形却不改这个
 #: 数字的话，用户机器上 ``%TEMP%`` 里的旧 WAV 会被继续用 —— 表现为"改了没生效"，
 #: 而且看起来完全不像缓存问题。**动过波形就 +1。**
-_SFX_REVISION = 2
+#: r1 → r2：去掉轮轨"哐当"声与引擎里的纯音 / 颤音
+#: r2 → r3：轮轨声以"连续滚动"的形式加回来
+_SFX_REVISION = 3
 
 #: 合成出的 WAV 落在这个临时目录下（按文件名幂等：文件在就不再重算）。
 _SFX_DIR = Path(tempfile.gettempdir()) / f"train3d_sfx_r{_SFX_REVISION}"
@@ -131,6 +139,30 @@ def _motor_wave() -> np.ndarray:
     return sig / np.max(np.abs(sig)) * 0.80
 
 
+def _roll_wave() -> np.ndarray:
+    """轮轨滚动声：**连续**的低频"沙沙"，1 秒无缝循环。
+
+    这是旧版"哐当"声的替代品，两者的区别只有一件事 —— **有没有瞬态**：
+
+    * 旧版每次撞击是一个瞬态尖峰（低通噪声 × 指数衰减 + 一段 210 Hz 闷响），
+      0.5 s 里放两下。速度一快撞击间隔缩短，就变成密集的嗒嗒嗒 / 嘀嘀嘀。
+    * 这里没有"点"可以加密：整段就是一条平稳的带限噪声，只有频段随车速整体
+      平移（快放 = 变亮变响）。所以它怎么放都不会变成打点。
+
+    两层：低频滚动（70–420 Hz，衰减缓，是主要的那层"轰"）加上一丝轮缘摩擦的
+    高频沙沙（700–1600 Hz，音量只有十分之一）。高频那层刻意压得很低 ——
+    孤立的、突出的高频最容易被听成电子音（见引擎声里删掉 380 / 570 Hz 那条）。
+    """
+    duration = 1.0
+    t = np.arange(int(_RATE * duration)) / _RATE
+
+    rolling = _band_noise(t, 70.0, 420.0, decay=0.35, seed=41)
+    friction = _band_noise(t, 700.0, 1600.0, decay=0.5, seed=47, count=48)
+
+    sig = rolling + 0.10 * friction
+    return sig / np.max(np.abs(sig)) * 0.55
+
+
 def _horn_wave() -> np.ndarray:
     """列车风笛：三支低音哨 + 气流噪声，1.8 秒（起音偏慢、收尾气散）。
 
@@ -156,9 +188,10 @@ def _horn_wave() -> np.ndarray:
 
 
 def _ensure_sfx() -> dict[str, Path]:
-    """把两段声音写到临时目录（已存在就不重写），返回名字 → 路径。"""
+    """把三段声音写到临时目录（已存在就不重写），返回名字 → 路径。"""
     specs = {
         "motor": _motor_wave,
+        "roll": _roll_wave,
         "horn": _horn_wave,
     }
     paths: dict[str, Path] = {}
@@ -175,7 +208,7 @@ def _ensure_sfx() -> dict[str, Path]:
 # --------------------------------------------------------------------------- #
 
 class TrainAudio:
-    """一列列车的声音：只有引擎（随车速变速）与风笛（按需触发）。
+    """一列列车的声音：引擎 + 轮轨滚动（随车速变速）与风笛（按需触发）。
 
     在 null 音频环境（离屏 / 测试）里自动退化成一个空壳 —— 所有方法都安全。
     """
@@ -184,6 +217,7 @@ class TrainAudio:
         self.base = base
         self.enabled = enabled
         self._motor = None
+        self._roll = None
         self._horn = None
         self._ready = False
         self._active = False
@@ -212,6 +246,8 @@ class TrainAudio:
         try:
             self._motor = self.base.loader.loadSfx(
                 Filename.fromOsSpecific(str(paths["motor"])))
+            self._roll = self.base.loader.loadSfx(
+                Filename.fromOsSpecific(str(paths["roll"])))
             self._horn = self.base.loader.loadSfx(
                 Filename.fromOsSpecific(str(paths["horn"])))
         except Exception:                       # noqa: BLE001
@@ -221,7 +257,9 @@ class TrainAudio:
             self.enabled = False
             return False
         self._motor.setLoop(True)
+        self._roll.setLoop(True)
         self._motor.setVolume(0.0)
+        self._roll.setVolume(0.0)
         self._active = True
         return True
 
@@ -231,13 +269,15 @@ class TrainAudio:
         """列车上线：开始放行驶声（音量先按静止状态置低）。"""
         if not self._load():
             return
-        if self._motor.status() != 2:            # 2 = PLAYING
-            self._motor.play()
+        for track in (self._motor, self._roll):
+            if track.status() != 2:              # 2 = PLAYING
+                track.play()
 
     def stop(self) -> None:
-        """列车下轨：停掉循环声。"""
-        if self._motor is not None:
-            self._motor.stop()
+        """列车下轨：停掉两种循环声。"""
+        for track in (self._motor, self._roll):
+            if track is not None:
+                track.stop()
 
     def update(self, speed_kmh: float, throttle: float) -> None:
         """每帧调一次：按车速改播放速率与音量。``throttle`` 用于轻微强调加速。"""
@@ -252,6 +292,15 @@ class TrainAudio:
         self._motor.setPlayRate(motor_rate)
         self._motor.setVolume(min(motor_volume, 0.92))
 
+        # 轮轨滚动声：停着不响（"停着只有很轻的怠速声"），起步后随车速变响变亮。
+        # 音量上限刻意压得比引擎低一截 —— 它是底噪，不该抢到前面来。
+        if v < 2.0:
+            self._roll.setVolume(0.0)
+        else:
+            roll_volume = 0.06 + 0.20 * min(v / 200.0, 1.0)
+            self._roll.setPlayRate(0.75 + 0.45 * frac)
+            self._roll.setVolume(min(roll_volume, 0.26))
+
     def horn(self) -> None:
         """鸣笛（单次，重复调用即重新吹响）。"""
         if not self._load():
@@ -264,4 +313,4 @@ class TrainAudio:
         self.stop()
         self._ready = False
         self._active = False
-        self._motor = self._horn = None
+        self._motor = self._roll = self._horn = None

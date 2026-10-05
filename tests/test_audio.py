@@ -58,6 +58,7 @@ def _band_share(wave: np.ndarray, low: float, high: float) -> float:
 
 def test_waveforms_are_deterministic_and_nonempty():
     for generator, seconds in ((audio_mod._motor_wave, 1.0),
+                               (audio_mod._roll_wave, 1.0),
                                (audio_mod._horn_wave, 1.8)):
         first = generator()
         second = generator()
@@ -124,6 +125,7 @@ def test_motor_wave_has_harmonic_pitch_structure():
 def test_waves_loop_without_a_click():
     """所有分量都是整数 Hz，循环接缝处必须连续（否则每圈"咔"一声）。"""
     for generator, seconds in ((audio_mod._motor_wave, 1.0),
+                               (audio_mod._roll_wave, 1.0),
                                (audio_mod._horn_wave, 1.8)):
         wave = generator()
         peak = np.max(np.abs(wave))
@@ -152,7 +154,7 @@ def test_ensure_sfx_writes_valid_wav_files():
     import wave as wave_mod
 
     paths = audio_mod._ensure_sfx()
-    assert set(paths) == {"motor", "horn"}, "行驶声音轨只该有引擎与风笛"
+    assert set(paths) == {"motor", "roll", "horn"}, "行驶声只该有引擎、轮轨滚动与风笛"
     for name, path in paths.items():
         assert path.exists()
         assert name in path.name
@@ -180,13 +182,91 @@ def test_sfx_cache_directory_is_revisioned():
     assert f"r{audio_mod._SFX_REVISION}" in audio_mod._SFX_DIR.name
 
 
-def test_no_wheel_click_track_remains():
-    """轮轨"哐当"声已经按用户要求删掉（那是"嘀嘀"的另一个来源）。
+def test_roll_wave_is_continuous_not_a_click_track():
+    """轮轨声必须是**连续**滚动，不能是"哐当"打点。
 
-    留着这个合成器、却没人调用它，只会在几个月后被人重新接回播放链路 ——
-    所以这里直接断言"它不存在"，删就要删干净。
+    这是用户两次要求的合取：先说"不要嘀嘀声"，后来又说"轮轨声可以回来，但不能像
+    打点"。所以判据只有一条 —— **有没有瞬态**。三个量各查一个角度：
+
+    * **包络不得有低谷**。撞击声在两次撞击之间几乎是静音，包络会掉到零附近，
+      而连续滚动声的最低谷也接近平均音量。这条最直接地把"有几点"量出来；
+    * **不得有每秒 3~15 下的周期调制**。撞击本来就是周期性的，速度一快就变成
+      嗒嗒嗒 —— 那正是"嘀嘀"的第二个来源（复用引擎声那条判据）；
+    * **峰值因数要低**。瞬态的特征就是"一个远高于平均的尖峰"，噪声没有。
+
+    每一条都配一个**故意做坏的对照**（用旧版那种 0.5 s 两声撞击拼出来），
+    对照必须被判失败 —— 否则判据本身失效了，测试会假装通过。
     """
-    assert not hasattr(audio_mod, "_wheels_wave")
+    wave = audio_mod._roll_wave()
+
+    def envelope(signal, window=512):
+        count = len(signal) // window
+        return np.sqrt((signal[: count * window]
+                        .reshape(count, window) ** 2).mean(axis=1))
+
+    rng = np.random.RandomState(3)
+    clicks = np.zeros(int(audio_mod._RATE * 0.5))
+    for position in (0.0, 0.25):                  # 旧版：每 0.5 s 两声"哐当"
+        start = int(position * audio_mod._RATE)
+        length = min(int(0.055 * audio_mod._RATE), len(clicks) - start)
+        tt = np.arange(length) / audio_mod._RATE
+        clicks[start:start + length] += (
+            rng.randn(length) * np.exp(-tt * 90.0)
+            + 0.5 * np.sin(2.0 * np.pi * 210.0 * tt) * np.exp(-tt * 55.0))
+    clicks /= np.max(np.abs(clicks))
+
+    # 1. 连续：包络最低谷不能塌下去
+    def floor_ratio(signal):
+        env = envelope(signal)
+        return float(env.min() / env.mean())
+
+    assert floor_ratio(clicks) < 0.2, "对照（撞击声）没被判成打点，判据失效了"
+    assert floor_ratio(wave) > 0.35, (
+        f"轮轨声的包络最低谷只有平均值的 {floor_ratio(wave) * 100:.0f}% —— "
+        f"中间有静音，就是打点声（对照：{floor_ratio(clicks) * 100:.0f}%）")
+
+    # 2. 无周期调制（每秒 3~15 下）
+    frame_rate = audio_mod._RATE / 1024
+    click_depth = _beep_depth(envelope(clicks, 1024), frame_rate)
+    roll_depth = _beep_depth(envelope(wave, 1024), frame_rate)
+    assert click_depth > 0.20, "对照没被判成周期打点，判据失效了"
+    # 阈值取 20%：连续带限噪声的包络本身就有随机起伏（实测 12%），但真打点是
+    # 两个数量级之外的量（对照实测 198%）——所以这个界说的是"离打点差得远"，
+    # 而不是"包络必须纹丝不动"。
+    assert roll_depth < 0.20, (
+        f"轮轨声有每秒 3~15 下的周期调制（{roll_depth * 100:.1f}%，"
+        f"对照 {click_depth * 100:.0f}%）—— 快起来会变成嗒嗒嗒")
+
+    # 3. 峰值因数低（没有瞬态尖峰）
+    def crest(signal):
+        return float(np.max(np.abs(signal)) / np.sqrt((signal ** 2).mean()))
+
+    assert crest(clicks) > 6.0, "对照的峰值因数不够高，判据失效了"
+    assert crest(wave) < 5.5, (
+        f"轮轨声的峰值因数是 {crest(wave):.1f}（对照撞击声 {crest(clicks):.1f}）—— "
+        f"说明里面藏着瞬态尖峰")
+
+
+def test_roll_wave_is_low_and_quiet():
+    """滚动声该是低频底噪，而且不该抢到引擎前面去。"""
+    wave = audio_mod._roll_wave()
+    # 实测：40–500 Hz 占 93%，1500 Hz 以上只有 0.6%
+    low = _band_share(wave, 40.0, 500.0)
+    assert low > 0.80, f"低频滚动只占 {low * 100:.0f}%，不够闷"
+    high = _band_share(wave, 1500.0, audio_mod._RATE / 2)
+    assert high < 0.02, f"高频占了 {high * 100:.1f}%，又会像电子音"
+    # 峰值低于引擎（0.80）—— 它只是底噪，不该抢到前面去
+    assert np.max(np.abs(wave)) < np.max(np.abs(audio_mod._motor_wave()))
+
+
+def test_no_discrete_impact_track_remains():
+    """轮轨"哐当"声（每 0.5 s 两声撞击）已经删掉，加回来的是连续滚动。
+
+    留着那个合成器、却没人调用它，只会在几个月后被人重新接回播放链路 ——
+    所以直接断言"撞击声不存在、滚动声存在"。删就要删干净，加也要加在对的地方。
+    """
+    assert not hasattr(audio_mod, "_wheels_wave"), "撞击声不该还在"
+    assert hasattr(audio_mod, "_roll_wave"), "连续滚动声该在"
 
 
 # --------------------------------------------------------------------------- #
