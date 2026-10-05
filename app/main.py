@@ -34,6 +34,7 @@ import scenes                              # noqa: E402
 from app import config                     # noqa: E402
 from app.editor import TrackEditor         # noqa: E402
 from app.hud import build_default_hud      # noqa: E402
+from core import paths                     # noqa: E402
 from core.track.catalog import Catalog     # noqa: E402
 from render import ground as ground_mod    # noqa: E402
 from render import style                   # noqa: E402
@@ -89,9 +90,19 @@ def _print_scenes(catalog: Catalog) -> None:
 
 
 def _load_startup_layout(path: str, catalog: Catalog):
-    """读一个存档：轨道照旧，布景看存档里记的预设（没有就不摆）。"""
-    loaded = scenes.load(path, catalog)
-    print(f"[启动] 已载入 {len(loaded.layout)} 节轨道：{path}")
+    """读一个存档：轨道照旧，布景看存档里记的预设（没有就不摆）。
+
+    路径先过一遍 :func:`core.paths.resolve_user_path`：打包成 exe 之后运行目录
+    不一定是"exe 旁边"（双击时是，从别的目录用绝对路径调就不是），而文档里写的
+    ``--open saves\\valley.json`` 是相对**游戏目录**说的。这一步让两种情形都对。
+    """
+    resolved = paths.resolve_user_path(path)
+    if not resolved.exists():
+        raise FileNotFoundError(
+            f"找不到存档 {path}（找过 {resolved}）。"
+            f"游戏目录是 {paths.user_dir()}")
+    loaded = scenes.load(resolved, catalog)
+    print(f"[启动] 已载入 {len(loaded.layout)} 节轨道：{resolved}")
     if loaded.scenery_key:
         print(f"[启动] 存档配的布景是 {loaded.scenery_key!r}（按预设重算）")
     else:
@@ -135,7 +146,12 @@ def main(argv=None) -> int:
         print(f"[场景] 环长 {scene.layout.total_length():.1f} m，{len(scene.layout)} 节；"
               f"布景 {scene.scenery.item_count} 件，场地 {scene.plot_size:.0f} m 见方")
     elif args.open_path:
-        loaded = _load_startup_layout(args.open_path, catalog)
+        try:
+            loaded = _load_startup_layout(args.open_path, catalog)
+        except (OSError, ValueError) as exc:
+            # 存档路径写错 / 文件坏了：说人话，别甩 traceback
+            print(f"[错误] {exc}")
+            return 2
 
     # ---- 场地：场景自己知道要多大的地，别用默认的 400 m 把山切在场地外
     plot = scene.plot_size if scene is not None else (

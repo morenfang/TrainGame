@@ -11,6 +11,8 @@ dependencies = ["numpy>=1.26"]
 # render/ 与 app/ 层需要（M0 起已启用）
 render = ["panda3d==1.10.16", "panda3d-gltf==1.3.0"]
 dev = ["pytest>=8.0"]
+# 只有 scripts/build_exe.py 打包时要用；玩游戏不需要装它
+packaging = ["pyinstaller>=6.0"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

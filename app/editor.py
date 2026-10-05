@@ -33,6 +33,7 @@ from typing import Mapping
 
 from panda3d.core import ClockObject, CollisionRay, Point3
 
+from core import paths
 from core.geometry import Pose
 from core.track.catalog import Catalog, PieceDef
 from core.track.layout import Layout, LayoutError, PortKey
@@ -218,8 +219,7 @@ class TrackEditor:
         self.catalog = catalog
         self.layout = layout if layout is not None else Layout(catalog=catalog)
         self.hud = hud
-        self.save_path = Path(save_path) if save_path else \
-            Path(__file__).resolve().parents[1] / "saves" / "layout.json"
+        self.save_path = Path(save_path) if save_path else paths.default_save_path()
         #: 存档里额外记的一行（场景的布景预设等）。Ctrl+S 时并进 JSON —— 存档只写
         #: 轨道拓扑的话，从场景里存一次档就把"这局配的是哪份布景"丢了。
         self.save_extra: dict[str, object] = dict(save_extra or {})

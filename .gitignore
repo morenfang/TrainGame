@@ -18,3 +18,11 @@ Thumbs.db
 
 # 临时日志
 *.log
+train3d_log.txt
+
+# 打包产物（scripts/build_exe.py 生成）
+build/
+dist/
+# PyInstaller 直接在仓库根跑时会留下一个临时 spec；正式的 spec 在 packaging/ 里
+/TrainGame.spec
+packaging/TrainGame-preview.png

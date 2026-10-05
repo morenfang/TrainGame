@@ -41,10 +41,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Iterator, Mapping, Sequence
 
+from core import paths
 from core.geometry import Pose, arc_end_pose, arc_point, normalize_angle
 
-#: 数据目录（项目根 / data）。
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+#: 数据目录（项目根 / data）。打包成 exe 后 ``data/`` 跟着程序走（见 ``core.paths``）。
+DATA_DIR = paths.data_dir()
 
 #: 端口位姿一致性判定的容差（米 / 弧度）。
 PORT_TOL = 1e-9

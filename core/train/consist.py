@@ -30,11 +30,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Iterator, Mapping, Sequence
 
+from core import paths
+
 #: 重力加速度（m/s²）
 G = 9.80665
 
-#: 数据目录（项目根 / data）
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+#: 数据目录（项目根 / data）。打包成 exe 后 ``data/`` 跟着程序走（见 ``core.paths``）。
+DATA_DIR = paths.data_dir()
 
 #: 门窗之间、门窗与鼻锥之间必须留出的最小净空（米）。
 #: 净空为零并不会让几何退化，只会让两个开口贴在一起 —— 那一定是数据写错了。
