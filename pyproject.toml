@@ -1,6 +1,6 @@
 [project]
 name = "train-sandbox"
-version = "0.1.0"
+version = "1.0.1"
 description = "3D 火车沙盘游戏：用轨道件拼出闭环线路，跑绿皮车 / 和谐号 / 复兴号"
 requires-python = ">=3.12"
 
