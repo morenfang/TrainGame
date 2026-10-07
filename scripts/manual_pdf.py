@@ -81,9 +81,10 @@ _SCENE_GALLERY = (
 )
 
 _TRAIN_GALLERY = (
-    ("scene_train_green_skin_10.png", "老式绿皮车", "动力集中：起步慢、上坡乏力"),
-    ("scene_train_crh380a_8.png", "和谐号 CRH380A", "8 辆编组，动力分散，加速快"),
-    ("scene_train_cr400af_8.png", "复兴号 CR400AF", "全目录加速最猛、极速最高"),
+    ("glb_huangsidai.png", "复兴号黄丝带 400BF", "glb 外观；8 / 16 辆，16 辆中间两头车对顶"),
+    ("scene_train_green_skin_10.png", "老式绿皮车", "动力集中：起步慢、上坡乏力（程序化）"),
+    ("scene_train_crh380a_8.png", "和谐号 CRH380A", "8 辆编组，动力分散（程序化）"),
+    ("scene_train_cr400af_8.png", "复兴号 CR400AF", "目录保留，外观程序化"),
 )
 
 #: 「拼轨与闭合」的**成对**截图：左图是前、右图是后（一键闭合前后对比）。

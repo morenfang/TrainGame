@@ -195,6 +195,9 @@ def main(argv=None) -> int:
     if scene is not None:
         # 场景是"直接就能跑"的，所以列车自己上线；用户按 ↑ 就走
         editor.spawn_train(step=0, train_id=scene.train_id)
+    elif loaded is not None and layout is not None and not layout.is_empty:
+        # --open 一份带布景的存档：用该预设默认的那列车（gorge → 复兴号 glb）
+        editor.spawn_train(step=0, train_id=scenes.train_id_for(loaded.scenery_key))
     else:
         editor.notify("鼠标移到网格上，左键放下第一节轨道")
 

@@ -44,7 +44,7 @@ from core.geometry import Pose, normalize_angle
 from core.track.path import CarState, PathError, RoutePath, place_consist, trace
 from core.train.consist import TrainSpec
 from core.train.dynamics import Train, TrainState
-from render import train_mesh
+from render import gltf_train, train_mesh
 from render.transform import apply_pose
 
 #: 开链上首车与线路末端的最小间隙（米）。贴着端头摆没有意义，也容易让人以为
@@ -105,6 +105,7 @@ class TrainView:
         self._anchor_heading = 0.0
 
         self._facings = spec.car_facings()
+        self._light_holder = None
         self._build_cars()
 
     # ==================================================================== #
@@ -124,6 +125,17 @@ class TrainView:
         return template
 
     def _build_cars(self) -> None:
+        gltf_cars = gltf_train.cars_for(self.spec)
+        if gltf_cars is not None:
+            self._light_holder = gltf_train.light_train(self.root)
+            for index, (car, template) in enumerate(zip(self.spec.cars, gltf_cars)):
+                node = template.copyTo(self.root)
+                node.setName(f"car_{index}_{car.id}")
+                self._cars.append(node)
+                key = (car.id, self._facings[index])
+                if key not in self._template_triangles:
+                    self._template_triangles[key] = gltf_train.triangle_count(template)
+            return
         for index, (car, flipped) in enumerate(zip(self.spec.cars, self._facings)):
             node = self._template(car, flipped).copyTo(self.root)
             node.setName(f"car_{index}_{car.id}")
@@ -131,6 +143,9 @@ class TrainView:
 
     def destroy(self) -> None:
         """从场景里摘掉整列车（模板与车节点一起）。"""
+        if self._light_holder is not None:
+            self._light_holder.removeNode()
+            self._light_holder = None
         self.root.removeNode()
         self._cars.clear()
         self._templates.clear()

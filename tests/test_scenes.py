@@ -118,6 +118,7 @@ def test_every_scene_builds(built):
         assert not scene.layout.is_empty
         assert scene.plot_size > 0.0
         assert scene.train_id, f"{key} 没说先上哪列车"
+        assert scene.train_id == scenes.presets.TRAIN_IDS[key]
         assert scene.clearance_points, "没有量尺就没法查净空"
 
 

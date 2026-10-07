@@ -77,6 +77,34 @@ def data_dir() -> Path:
     return bundle_dir() / "data"
 
 
+def models_dir() -> Path:
+    """外部 glTF 模型目录。
+
+    优先 ``models/``（你放下的编组 glb），没有再退到 ``assets/models/``。
+    打包后跟着 ``bundle_dir()`` 走。
+    """
+    primary = bundle_dir() / "models"
+    if primary.exists():
+        return primary
+    return bundle_dir() / "assets" / "models"
+
+
+def resolve_model_path(name: str | Path) -> Path | None:
+    """按文件名找一个 ``.glb`` / ``.gltf``。没有就返回 ``None``，让调用方退回程序化网格。
+
+    查找顺序：``models/`` → ``assets/models/`` → 仓库（或解包）根目录。
+    """
+    raw = Path(name)
+    if raw.is_absolute():
+        return raw if raw.exists() else None
+    for base in (bundle_dir() / "models", bundle_dir() / "assets" / "models",
+                 bundle_dir()):
+        probe = base / raw
+        if probe.exists():
+            return probe
+    return None
+
+
 def _executable_dir() -> Path:
     return Path(sys.executable).resolve().parent
 

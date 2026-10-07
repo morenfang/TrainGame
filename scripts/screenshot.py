@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from panda3d.core import Filename, PNMImage, loadPrcFileData  # noqa: E402
+from panda3d.core import Filename, PNMImage, Vec3, loadPrcFileData  # noqa: E402
 
 import scenes  # noqa: E402
 from core.geometry import Pose  # noqa: E402
@@ -161,6 +161,8 @@ def parse_args(argv=None):
                              "用来在不开窗口的情况下确认存档里到底有什么")
     parser.add_argument("--hud", action="store_true",
                         help="带上 HUD 渲染（与游戏里看到的一致）")
+    parser.add_argument("--train", default=None, metavar="ID",
+                        help="召唤一列编组上轨（例如 cr400af_8）；会走编辑器那条路径")
     parser.add_argument("--list", action="store_true", help="列出可用场景")
     return parser.parse_args(argv)
 
@@ -257,14 +259,15 @@ def main(argv=None) -> int:
         span = _catalog_grid(parent, catalog)
 
     if layout is not None:
-        if args.hud:
+        if args.hud or args.train:
             # 与游戏走**同一条**构造路径（main.py 也是这样建的）
             from app.editor import TrackEditor
             from app.hud import build_default_hud
 
             editor = TrackEditor(base, catalog, layout=layout,
-                                 hud=build_default_hud(base))
-            editor._refresh_hud()
+                                 hud=build_default_hud(base) if args.hud else None)
+            if args.hud:
+                editor._refresh_hud()
             view = editor.view
         else:
             view = scene_mod.LayoutView(layout, base.render)
@@ -288,9 +291,21 @@ def main(argv=None) -> int:
         if args.save and args.open_path:
             print("[提示] --open 是只读渲染，--save 已忽略（不想覆盖你正在看的存档）")
 
+        if args.train:
+            spawned = editor.spawn_train(step=0, train_id=args.train)
+            if spawned is None:
+                print(f"[错误] 无法上线列车 {args.train}")
+                return 2
+            print(f"列车 {spawned.spec.id}：{spawned.spec.name}，"
+                  f"{spawned.car_count} 节 / {spawned.consist_length:.1f} m")
+            if spawned.placement_error:
+                print("摆位：", spawned.placement_error)
+
     camera = editor.camera if editor is not None else camera_mod.OrbitCamera(
         base, azimuth_deg=args.azimuth, elevation_deg=args.elevation,
     )
+    camera.azimuth = math.radians(args.azimuth)
+    camera.elevation = math.radians(args.elevation)
     if args.distance is not None:
         camera.distance = args.distance
         camera.apply()
@@ -305,6 +320,17 @@ def main(argv=None) -> int:
         camera.target = [span[0] * 0.5, 0.0, span[1] * 0.5]
         camera.distance = max(span) * 1.15
         camera.apply()
+
+    if args.train and editor is not None and editor.train_view is not None:
+        # 默认取景是整条线路，车只是画面里一条细线。有 --train 时围着头车鼻锥。
+        from panda3d.core import Vec3 as _V3
+        head = editor.train_view.node_for(0)
+        if head is not None:
+            nose = head.getMat().xformPoint(_V3(4.5, 1.5, 0.0))
+            camera.target = [nose.x, nose.y, nose.z]
+            if args.distance is None:
+                camera.distance = 22.0
+            camera.apply()
 
     # 默认文件名要能区分"内置场景"与"你的一份存档" —— 否则 ``--open saves/circle.json``
     # 会正好盖掉内置场景的 ``scene_circle.png``，让人以为内置场景出了问题。
