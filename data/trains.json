@@ -14,6 +14,10 @@
     "  Shift+空格 与 ↓ 拉到底就是同一件事，用户按下去只会觉得「没反应」。",
     "  紧急取 2.4 m/s² 是贴着黏着线定的（0.25*g ≈ 2.45）—— 制动这一侧没有做黏着极限约束，所以这个数不能凭手感随便往上加。",
 
+    "—— mesh：可选的整列 glTF（.glb）。有文件就用它画车，没有就继续走下面的 shape 放样。",
+    "  模型按真实米制建模；渲染时只把长度缩到 SCALE_MODEL≈0.4，横断面不缩（轨距没缩）。",
+    "  文件名相对 assets/models/，也在仓库根目录找（方便刚丢进来的模型立刻能看）。",
+
     "—— shape：车体外观几何（schema 2 新增，每个车型必填）——",
     "profile 是**半断面**：从底面中线 (0, 地板高) 起、到顶面中线 (0, 车顶高) 止的一串 [横向, 高度]。",
     "  只写一半是因为车体左右对称——写一半再镜像，就没有「左边比右边宽 3 mm」这种数据错误的可能。",
@@ -217,9 +221,194 @@
         "doors": { "y": [1.00, 2.78], "per_end": 1, "width": 0.62, "inset": 0.52 },
         "stripe": [1.50, 1.95]
       }
+    },
+    "cr400bf_hsd_end": {
+      "name": "复兴号黄丝带 400BF 头车",
+      "length": 10.0,
+      "bogie_half_spacing": 3.5,
+      "mass_kg": 45500,
+      "powered": true,
+      "roof_gear": "ac",
+      "livery": { "body": "#F7F8F9", "band": "#C0392B", "roof": "#BFC5CA" },
+      "shape": {
+        "profile": [
+          [0.00, 1.00],
+          [1.00, 1.00],
+          [1.30, 1.20],
+          [1.40, 1.66],
+          [1.40, 2.44],
+          [1.34, 2.96],
+          [1.20, 3.30],
+          [0.92, 3.50],
+          [0.00, 3.58]
+        ],
+        "nose": { "length": 1.55, "end_scale": 0.13, "power": 1.05, "pivot_height": 1.55, "ends": "forward" },
+        "windows": { "y": [2.00, 2.78], "count": 6, "width": 0.88, "pitch": 0.98 },
+        "doors": { "y": [1.00, 2.78], "per_end": 1, "width": 0.62, "inset": 0.52 },
+        "stripe": [1.50, 1.95]
+      }
+    },
+    "cr400bf_hsd_mid": {
+      "name": "复兴号黄丝带 400BF 中间车",
+      "length": 10.0,
+      "bogie_half_spacing": 3.5,
+      "mass_kg": 46000,
+      "powered": true,
+      "roof_gear": "pantograph",
+      "livery": { "body": "#F7F8F9", "band": "#C0392B", "roof": "#BFC5CA" },
+      "shape": {
+        "profile": [
+          [0.00, 1.00],
+          [1.00, 1.00],
+          [1.30, 1.20],
+          [1.40, 1.66],
+          [1.40, 2.44],
+          [1.34, 2.96],
+          [1.20, 3.30],
+          [0.92, 3.50],
+          [0.00, 3.58]
+        ],
+        "nose": { "length": 0.18, "end_scale": 0.97, "power": 1.0, "pivot_height": 2.10, "ends": "both" },
+        "windows": { "y": [2.00, 2.78], "count": 6, "width": 0.92, "pitch": 1.22 },
+        "doors": { "y": [1.00, 2.78], "per_end": 1, "width": 0.62, "inset": 0.52 },
+        "stripe": [1.50, 1.95]
+      }
+    },
+    "qj_loco": {
+      "name": "前进型蒸汽机车",
+      "length": 9.6,
+      "bogie_half_spacing": 3.2,
+      "mass_kg": 133000,
+      "powered": true,
+      "roof_gear": "fans",
+      "livery": { "body": "#2C2416", "band": "#C0392B", "roof": "#1A140C" },
+      "shape": {
+        "profile": [
+          [0.00, 1.05],
+          [1.10, 1.05],
+          [1.32, 1.30],
+          [1.32, 3.10],
+          [0.96, 3.40],
+          [0.00, 3.50]
+        ],
+        "nose": { "length": 0.40, "end_scale": 0.85, "power": 1.2, "pivot_height": 1.80, "ends": "both" }
+      }
+    },
+    "qj_tender": {
+      "name": "前进型煤水车",
+      "length": 6.8,
+      "bogie_half_spacing": 1.12,
+      "mass_kg": 32000,
+      "powered": false,
+      "roof_gear": "ac",
+      "livery": { "body": "#2C2416", "band": "#C0392B", "roof": "#1A140C" },
+      "shape": {
+        "profile": [
+          [0.00, 1.05],
+          [1.10, 1.05],
+          [1.32, 1.25],
+          [1.32, 3.10],
+          [0.96, 3.40],
+          [0.00, 3.50]
+        ],
+        "nose": { "length": 0.12, "end_scale": 0.97, "power": 1.0, "pivot_height": 1.80, "ends": "both" }
+      }
+    },
+    "freight_c70": {
+      "name": "C70 敞车",
+      "length": 6.8,
+      "bogie_half_spacing": 1.52,
+      "mass_kg": 22000,
+      "powered": false,
+      "roof_gear": "ac",
+      "livery": { "body": "#6B3A2A", "band": "#4A2A1C", "roof": "#3A2418" },
+      "shape": {
+        "profile": [
+          [0.00, 1.05],
+          [1.10, 1.05],
+          [1.32, 1.25],
+          [1.32, 3.10],
+          [0.96, 3.40],
+          [0.00, 3.50]
+        ],
+        "nose": { "length": 0.12, "end_scale": 0.97, "power": 1.0, "pivot_height": 1.80, "ends": "both" }
+      }
+    },
+    "freight_p70": {
+      "name": "P70 棚车",
+      "length": 6.8,
+      "bogie_half_spacing": 1.76,
+      "mass_kg": 24000,
+      "powered": false,
+      "roof_gear": "ac",
+      "livery": { "body": "#5C4033", "band": "#3E2A22", "roof": "#2A1C16" },
+      "shape": {
+        "profile": [
+          [0.00, 1.05],
+          [1.10, 1.05],
+          [1.32, 1.25],
+          [1.32, 3.10],
+          [0.96, 3.40],
+          [0.00, 3.50]
+        ],
+        "nose": { "length": 0.12, "end_scale": 0.97, "power": 1.0, "pivot_height": 1.80, "ends": "both" }
+      }
+    },
+    "freight_g70": {
+      "name": "G70 罐车",
+      "length": 6.8,
+      "bogie_half_spacing": 1.56,
+      "mass_kg": 20000,
+      "powered": false,
+      "roof_gear": "ac",
+      "livery": { "body": "#8A6A2A", "band": "#C0392B", "roof": "#6A5018" },
+      "shape": {
+        "profile": [
+          [0.00, 1.05],
+          [1.10, 1.05],
+          [1.32, 1.25],
+          [1.32, 3.10],
+          [0.96, 3.40],
+          [0.00, 3.50]
+        ],
+        "nose": { "length": 0.12, "end_scale": 0.97, "power": 1.0, "pivot_height": 1.80, "ends": "both" }
+      }
+    },
+    "freight_n70": {
+      "name": "N70 平车",
+      "length": 6.8,
+      "bogie_half_spacing": 1.68,
+      "mass_kg": 22000,
+      "powered": false,
+      "roof_gear": "ac",
+      "livery": { "body": "#4A4A44", "band": "#2A2A26", "roof": "#3A3A36" },
+      "shape": {
+        "profile": [
+          [0.00, 1.05],
+          [1.10, 1.05],
+          [1.32, 1.25],
+          [1.32, 3.10],
+          [0.96, 3.40],
+          [0.00, 3.50]
+        ],
+        "nose": { "length": 0.12, "end_scale": 0.97, "power": 1.0, "pivot_height": 1.80, "ends": "both" }
+      }
     }
   },
   "trains": [
+    {
+      "id": "green_skin_8",
+      "name": "老式绿皮车 · 东风4B + 8 辆 25G",
+      "coupling_gap": 0.3,
+      "power_w": 1985000,
+      "max_tractive_force_n": 300000,
+      "max_brake_force_n": 505000,
+      "max_emergency_brake_force_n": 1426000,
+      "adhesion": 0.25,
+      "davis": [0.015, 1.5e-4, 2.0e-5],
+      "max_speed_kmh": 100,
+      "formation": [["df4b_loco", 1], ["coach_25g_ac", 8]]
+    },
     {
       "id": "green_skin_10",
       "name": "老式绿皮车 · 机车 + 10 辆",
@@ -265,7 +454,7 @@
     },
     {
       "id": "cr400af_8",
-      "name": "复兴号 CR400AF · 8 辆编组",
+      "name": "复兴号 CR400AF · 红神龙 · 8 辆",
       "coupling_gap": 0.25,
       "power_w": 11000000,
       "max_tractive_force_n": 260000,
@@ -282,7 +471,7 @@
     },
     {
       "id": "cr400af_16",
-      "name": "复兴号 CR400AF · 16 辆长编组",
+      "name": "复兴号 CR400AF · 红神龙 · 16 辆",
       "coupling_gap": 0.25,
       "power_w": 20000000,
       "max_tractive_force_n": 320000,
@@ -295,6 +484,137 @@
         ["cr400af_end", 1],
         ["cr400af_mid", 14],
         ["cr400af_end", 1]
+      ]
+    },
+    {
+      "id": "cr400afz_8",
+      "name": "复兴号 CR400AF-Z · 瑞龙 · 8 辆",
+      "coupling_gap": 0.25,
+      "power_w": 11000000,
+      "max_tractive_force_n": 260000,
+      "max_brake_force_n": 367000,
+      "max_emergency_brake_force_n": 880800,
+      "adhesion": 0.25,
+      "davis": [0.009, 1.0e-4, 1.25e-5],
+      "max_speed_kmh": 350,
+      "formation": [
+        ["cr400af_end", 1],
+        ["cr400af_mid", 6],
+        ["cr400af_end", 1]
+      ]
+    },
+    {
+      "id": "cr400afz_16",
+      "name": "复兴号 CR400AF-Z · 瑞龙 · 16 辆",
+      "coupling_gap": 0.25,
+      "power_w": 20000000,
+      "max_tractive_force_n": 320000,
+      "max_brake_force_n": 735000,
+      "max_emergency_brake_force_n": 1764000,
+      "adhesion": 0.25,
+      "davis": [0.009, 1.0e-4, 1.25e-5],
+      "max_speed_kmh": 350,
+      "formation": [
+        ["cr400af_end", 1],
+        ["cr400af_mid", 14],
+        ["cr400af_end", 1]
+      ]
+    },
+    {
+      "id": "cr300bf_8",
+      "name": "复兴号 CR300BF · 蓝暖男 · 8 辆",
+      "coupling_gap": 0.25,
+      "power_w": 5500000,
+      "max_tractive_force_n": 220000,
+      "max_brake_force_n": 367000,
+      "max_emergency_brake_force_n": 880800,
+      "adhesion": 0.25,
+      "davis": [0.010, 1.1e-4, 1.4e-5],
+      "max_speed_kmh": 250,
+      "formation": [
+        ["cr400af_end", 1],
+        ["cr400af_mid", 6],
+        ["cr400af_end", 1]
+      ]
+    },
+    {
+      "id": "cr300bf_16",
+      "name": "复兴号 CR300BF · 蓝暖男 · 16 辆",
+      "coupling_gap": 0.25,
+      "power_w": 10000000,
+      "max_tractive_force_n": 280000,
+      "max_brake_force_n": 735000,
+      "max_emergency_brake_force_n": 1764000,
+      "adhesion": 0.25,
+      "davis": [0.010, 1.1e-4, 1.4e-5],
+      "max_speed_kmh": 250,
+      "formation": [
+        ["cr400af_end", 1],
+        ["cr400af_mid", 14],
+        ["cr400af_end", 1]
+      ]
+    },
+    {
+      "id": "cr400bf_huangsidai_8",
+      "name": "复兴号黄丝带400BF · 8 辆",
+      "mesh": "CR400BF_HuangSiDai_6car.glb",
+      "coupling_gap": 0.25,
+      "power_w": 5500000,
+      "max_tractive_force_n": 220000,
+      "max_brake_force_n": 367000,
+      "max_emergency_brake_force_n": 880800,
+      "adhesion": 0.25,
+      "davis": [0.010, 1.1e-4, 1.4e-5],
+      "max_speed_kmh": 250,
+      "formation": [
+        ["cr400bf_hsd_end", 1],
+        ["cr400bf_hsd_mid", 6],
+        ["cr400bf_hsd_end", 1]
+      ]
+    },
+    {
+      "id": "cr400bf_huangsidai_16",
+      "name": "复兴号黄丝带400BF · 16 辆",
+      "mesh": "CR400BF_HuangSiDai_6car.glb",
+      "coupling_gap": 0.25,
+      "power_w": 10000000,
+      "max_tractive_force_n": 280000,
+      "max_brake_force_n": 735000,
+      "max_emergency_brake_force_n": 1764000,
+      "adhesion": 0.25,
+      "davis": [0.010, 1.1e-4, 1.4e-5],
+      "max_speed_kmh": 250,
+      "formation": [
+        ["cr400bf_hsd_end", 1],
+        ["cr400bf_hsd_mid", 6],
+        ["cr400bf_hsd_end", 1],
+        ["cr400bf_hsd_end", 1],
+        ["cr400bf_hsd_mid", 6],
+        ["cr400bf_hsd_end", 1]
+      ]
+    },
+    {
+      "id": "steam_qj",
+      "name": "前进型蒸汽机车 · 货车",
+      "coupling_gap": 0.25,
+      "power_w": 2200000,
+      "max_tractive_force_n": 250000,
+      "max_brake_force_n": 290000,
+      "max_emergency_brake_force_n": 818000,
+      "adhesion": 0.25,
+      "davis": [0.018, 1.8e-4, 2.5e-5],
+      "max_speed_kmh": 80,
+      "formation": [
+        ["qj_loco", 1],
+        ["qj_tender", 1],
+        ["freight_c70", 1],
+        ["freight_p70", 1],
+        ["freight_g70", 1],
+        ["freight_c70", 1],
+        ["freight_p70", 1],
+        ["freight_n70", 1],
+        ["freight_g70", 1],
+        ["freight_c70", 1]
       ]
     }
   ]

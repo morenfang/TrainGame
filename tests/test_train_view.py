@@ -195,8 +195,10 @@ def test_one_node_per_car(app, catalog, trains):
 
 def test_same_car_type_shares_one_geometry(app, catalog, trains):
     """同型车厢必须共享 Geom（``copyTo`` 实例化），否则 8 节车会各存一份顶点。"""
-    layout, first = build_circle(catalog)
     spec = trains["crh380a_8"]
+    if spec.mesh:
+        pytest.skip("外部 glb 每节是独立网格，不走程序化实例化")
+    layout, first = build_circle(catalog)
     view = TrainView(spec, app.render)
 
     middle = [i for i, car in enumerate(spec.cars) if car.id == "crh380a_mid"]

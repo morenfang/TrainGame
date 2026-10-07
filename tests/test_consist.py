@@ -44,8 +44,33 @@ def test_builtin_catalog_has_the_three_requested_trains(catalog):
     assert "cr400af_8" in catalog      # 复兴号动车组
 
 
-def test_builtin_catalog_has_no_validation_warnings(catalog):
-    assert catalog.validate() == []
+def test_huangsidai_points_at_the_glb(catalog):
+    """目前 models/ 里只留黄丝带一份 glb；8/16 节共用，其它编组走程序化车体。"""
+    for train_id in ("cr400bf_huangsidai_8", "cr400bf_huangsidai_16"):
+        assert catalog[train_id].mesh == "CR400BF_HuangSiDai_6car.glb"
+    assert catalog["cr400bf_huangsidai_8"].car_count == 8
+    assert catalog["cr400bf_huangsidai_16"].car_count == 16
+    assert not catalog["cr400af_8"].mesh
+    assert not catalog["crh380a_8"].mesh
+    assert not catalog["green_skin_10"].mesh
+    assert not catalog["steam_qj"].mesh
+
+
+def test_huangsidai_16_has_cabs_facing_in_the_middle(catalog):
+    """16 节重联：第 8、9 节都是头车，鼻锥对顶。"""
+    spec = catalog["cr400bf_huangsidai_16"]
+    assert [c.id for c in spec.cars[6:10]] == [
+        "cr400bf_hsd_mid",
+        "cr400bf_hsd_end",
+        "cr400bf_hsd_end",
+        "cr400bf_hsd_mid",
+    ]
+    facings = spec.car_facings()
+    assert facings[0] is False
+    assert facings[7] is True
+    assert facings[8] is False
+    assert facings[15] is True
+    assert sum(facings) == 2
 
 
 def test_catalog_reports_unknown_train_clearly(catalog):

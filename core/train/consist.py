@@ -646,6 +646,10 @@ class TrainSpec:
     #: "一把拉死"的额外制动力。见 `data/trains.json` 的 notes 与
     #: `core.train.dynamics.brake_force`。
     max_emergency_brake_force_n: float = 0.0
+    #: 可选的整列 glTF 模型文件名（相对 ``assets/models/`` 或仓库根）。
+    #: 空字符串 = 用参数化网格。文件找不到时渲染层同样退回参数化网格，
+    #: 所以缺模型不会让游戏起不来。
+    mesh: str = ""
     spec: Mapping = field(default_factory=dict, compare=False, repr=False)
 
     # ---------------------------------------------------------------- 派生量
@@ -682,17 +686,31 @@ class TrainSpec:
     def car_facings(self) -> tuple[bool, ...]:
         """每节车是否要**掉头**摆放（``True`` = 它的局部 +x 要指向列车后方）。
 
-        「头型只朝一端」的车（CRH380A / CR400AF 的头车）排在编组**后半段**时
-        必须掉头，头型才会永远朝外。规则本身只有一句话，但它不是审美问题：
-        不掉头的话，整列车会一头平、一头尖，中间还冒出一个尖头。
+        「头型只朝一端」的车：单独一列时后半段掉头；两列重联时相邻两节头车
+        鼻锥对顶（前一列的尾掉头、后一列的头不掉），两端外指。
         """
         count = self.car_count
-        facings: list[bool] = []
-        for index, car in enumerate(self.cars):
+        one_ended: list[bool] = []
+        for car in self.cars:
             nose = car.shape.nose if car.shape is not None else None
-            one_ended = (nose is not None and nose.has_nose_at("end")
-                         and not nose.has_nose_at("start"))
-            facings.append(index * 2 >= count and one_ended)
+            one_ended.append(
+                nose is not None
+                and nose.has_nose_at("end")
+                and not nose.has_nose_at("start")
+            )
+        facings: list[bool] = []
+        for index, is_cab in enumerate(one_ended):
+            if not is_cab:
+                facings.append(False)
+                continue
+            prev_cab = index > 0 and one_ended[index - 1]
+            next_cab = index + 1 < count and one_ended[index + 1]
+            if next_cab:
+                facings.append(True)   # 本单元尾，与下一节头车对顶
+            elif prev_cab:
+                facings.append(False)  # 下一单元头，鼻锥朝前对顶
+            else:
+                facings.append(index * 2 >= count)
         return tuple(facings)
 
     @property
@@ -903,6 +921,7 @@ def build_train(spec: Mapping, car_types: Mapping[str, CarSpec]) -> TrainSpec:
         davis=(float(davis[0]), float(davis[1]), float(davis[2])),
         max_speed_kmh=float(spec.get("max_speed_kmh", 120.0)),
         speed_limit_scale=float(spec.get("speed_limit_scale", 1.0)),
+        mesh=str(spec.get("mesh", "") or ""),
         spec=dict(spec),
     )
 

@@ -72,6 +72,23 @@ def test_data_dir_has_the_catalogs():
     assert (paths.data_dir() / "trains.json").exists()
 
 
+def test_models_dir_sits_next_to_data():
+    repo = Path(__file__).resolve().parents[1]
+    assert paths.models_dir() == repo / "models"
+
+
+def test_resolve_model_path_finds_a_glb_in_models():
+    found = paths.resolve_model_path("CR400BF_HuangSiDai_6car.glb")
+    if found is None:
+        pytest.skip("models/ 里还没有编组 glb")
+    assert found.name == "CR400BF_HuangSiDai_6car.glb"
+    assert found.exists()
+
+
+def test_resolve_model_path_returns_none_when_missing():
+    assert paths.resolve_model_path("definitely-not-a-train.glb") is None
+
+
 def test_catalog_actually_reads_through_data_dir(monkeypatch, tmp_path):
     """目录模块必须真的走 :func:`paths.data_dir`，而不是自己拼相对路径。
 

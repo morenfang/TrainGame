@@ -64,6 +64,16 @@ PLOT_SIZES = {
     "overpass": 920.0,   # 环线自己就有 640 × 80，远山在 370 × 200 的椭圆上
 }
 
+#: 读档时只凭 scenery key 就能知道该上哪列车，不必把整份场景再拼一遍。
+#: 必须与下面各 ``build_*`` 里写的 ``train_id`` 一致（``tests/test_scenes.py`` 盯着）。
+TRAIN_IDS = {
+    "valley": "cr400bf_huangsidai_8",
+    "gorge": "cr400bf_huangsidai_8",
+    "town": "green_skin_10",
+    "lake": "green_skin_10",
+    "overpass": "cr400bf_huangsidai_16",
+}
+
 #: 站台近边离轨道中心线的距离（米）。比 ``TRACK_CLEARANCE`` 多留 0.6 m：
 #: 真实站台边缘离轨道中心约 1.75 m，沙盘尺度下取 2.6 m 既贴得住又不侵限。
 _PLATFORM_GAP = 2.6
@@ -488,7 +498,7 @@ def build_valley(catalog: Catalog) -> Scene:
         layout=layout,
         scenery=scenery_mod.Scenery(peaks=tuple(peaks), rivers=(river,),
                                     meadows=meadows, trees=trees, houses=houses),
-        plot_size=PLOT_SIZES["valley"], train_id="crh380a_8",
+        plot_size=PLOT_SIZES["valley"], train_id="cr400bf_huangsidai_8",
         clearance_points=tuple(walk),
     )
 
@@ -663,7 +673,7 @@ def build_gorge(catalog: Catalog) -> Scene:
         scenery=scenery_mod.Scenery(peaks=tuple(peaks) + tuple(hills),
                                     rivers=(river,), meadows=meadows,
                                     trees=trees, houses=houses),
-        plot_size=PLOT_SIZES["gorge"], train_id="cr400af_8",
+        plot_size=PLOT_SIZES["gorge"], train_id="cr400bf_huangsidai_8",
         clearance_points=tuple(walk),
     )
 
@@ -989,7 +999,7 @@ def build_overpass(catalog: Catalog) -> Scene:
         layout=layout,
         scenery=scenery_mod.Scenery(peaks=tuple(peaks), meadows=meadows,
                                     trees=trees, houses=houses),
-        plot_size=PLOT_SIZES["overpass"], train_id="cr400af_8",
+        plot_size=PLOT_SIZES["overpass"], train_id="cr400bf_huangsidai_16",
         clearance_points=tuple(walk) + tuple(bypass_line),
     )
 

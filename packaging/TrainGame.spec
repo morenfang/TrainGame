@@ -167,16 +167,19 @@ datas = [
 for src in sorted((ROOT / "data").glob("*.json")):
     datas.append((str(src), "data"))
 
+for src in sorted((ROOT / "models").glob("*.glb")):
+    datas.append((str(src), "models"))
+
 # --------------------------------------------------------------------------- #
 # 模块
 # --------------------------------------------------------------------------- #
 
-#: 游戏自己需要的顶层包（PyInstaller 从入口脚本顺着 import 也能找到，这里显式
-#: 列出来是为了让"改错了立刻报错"，而不是等到运行时某个动态导入悄悄失败）。
 hiddenimports = [
     "panda3d.core",
     "panda3d.direct",
     "panda3d.dtoolconfig",
+    "gltf",
+    "simplepbr",
     "direct.showbase.ShowBase",
     "direct.directbase.DirectStart",
     "direct.gui.OnscreenText",

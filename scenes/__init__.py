@@ -38,6 +38,7 @@ SCENERY_KEY = "scenery"
 __all__ = [
     "SCENERY_KEY", "Scene", "SceneError", "LoadedScene", "build", "keys",
     "load", "presets", "plot_size_of", "save", "scenery_for", "tracks",
+    "train_id_for",
 ]
 
 
@@ -104,3 +105,10 @@ def plot_size_of(key: str | None) -> float:
     存档里的轨道是可以独立打开的，布景不过是锦上添花。
     """
     return presets.PLOT_SIZES.get(key, DEFAULT_PLOT)
+
+
+def train_id_for(key: str | None) -> str | None:
+    """这个场景默认上哪列车。存档只记布景 key，读档时用同一张表。"""
+    if key is None:
+        return None
+    return presets.TRAIN_IDS.get(key)
