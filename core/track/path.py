@@ -18,8 +18,16 @@
    自动补齐建立）。这时走线到末端就"没接东西"了，可缝两端在几何上**严丝合缝**
    —— 实测误差 1e-13 m 量级，与真闭环同一量级。要是只认端口，列车会停在一道
    **看不见的缝**上：缺口显示 0.0000 m、轨道看上去是连续的，用户眼里就是
-   "轨道明明接上了，车却卡住不动"。   所以 :func:`trace` 在末端无 peer 时补一次
-   几何判据（位置 + 航向，见 ``CLOSURE_POSITION_TOL``）。
+   "轨道明明接上了，车却卡住不动"。
+
+   所以 :func:`trace` 在末端无 peer 时要做两件事：
+
+   * **跨过虚拟缝**：若另一空闲端口与当前端口 ``join_gap`` 在容差内（外指向
+     相反、位置重合），就当作已 ``connect()`` 继续走 —— 否则从环**中段**重走
+     线（``TrainView`` 锚定）只会走到缝口就 ``open_end``，把闭环路径降级成开链，
+     列车照样钉死在 #40→#39。
+   * **首尾重合**：虚拟缝对不上、但出口帧与起点重合时，仍直接认成环。
+
    判据仍卡在 1e-6 m：真闭环的误差在 1e-14 m 量级，而"少一节"的开链缺口是
    **米级**（实测：45° 的圆环少一节差 **30.6 m**，22.5° 的圆环接一半差
    **80 m** = 直径），中间隔着七八个数量级，所以不会把没铺完的线误判成环。
@@ -304,18 +312,11 @@ def trace(layout: Layout, start: PortKey,
 
         peer = layout.peer_of(piece_index, exit_port)
         if peer is None:
-            # 末端没接东西。这里有两种情形，必须分清：
-            #
-            # * **真的开链末端** —— 走线到此为止（termination="open_end"）；
-            # * **末端与起点严丝合缝** —— 链自己围成了一个环，只是最后那道缝
-            #   还没写进连接表（见模块文档结论 2）。这时必须把路径当**环**交给
-            #   列车：缝既然严丝合缝，跨过去在几何上就是连续的，否则列车会停在
-            #   一道看不见的缝上（HUD 显示"缺口 0.0000 m"），也就是用户报的
-            #   "轨道明明接上了、车却卡在这一节和下一节之间"。
-            #
-            #   比位置还不够，还要比航向：`approx_equal` 同时卡位置与航向，于是
-            #   "出去又原路折回来"的链（航向差 π）不会被误判成环 —— 那种链列车
-            #   得掉头才走得通，本来就跑不了一圈。
+            # 连接表里没边：也许是还没按 C 焊上的几何缝 —— 跨过去继续走
+            peer = _virtual_seam_peer(layout, (piece_index, exit_port))
+        if peer is None:
+            # 末端真的没接东西。若出口帧与起点重合，整条链自己就是环
+            # （从空闲端口起步绕一圈回到对面空闲端口、且两帧重合）。
             if origin is not None and segment.exit_frame.approx_equal(
                     origin, CLOSURE_POSITION_TOL, CLOSURE_HEADING_TOL):
                 return RoutePath(
@@ -325,12 +326,12 @@ def trace(layout: Layout, start: PortKey,
                     origin=origin,
                     termination="closed",
                 )
-            termination = "open_end"  # 开链的末端
+            termination = "open_end"
             break
 
         next_piece, next_port = peer
         if (next_piece, next_port) == start:
-            # 回到出发点：图上的环 = 几何上的精确闭环
+            # 回到出发点：图上的环 = 几何上的精确闭环（含跨过虚拟缝回来）
             return RoutePath(
                 segments=tuple(segments),
                 closed=True,
@@ -353,6 +354,25 @@ def trace(layout: Layout, start: PortKey,
         origin=origin or Pose.origin(),
         termination=termination,
     )
+
+
+def _virtual_seam_peer(layout: Layout, key: PortKey) -> PortKey | None:
+    """找与 ``key`` 几何上能接上、但连接表里还没焊的另一空闲端口。
+
+    ``Layout.join_gap`` 的语义是：位置重合、外指向相反（航向差 π 算对齐）。
+    容差与 :func:`trace` 认环相同 —— 严丝合缝才跨，米级缺口绝不能跨。
+    """
+    best: PortKey | None = None
+    best_gap: tuple[float, float] | None = None
+    for other in layout.free_ports():
+        if other == key or other[0] == key[0]:
+            continue
+        gap = layout.join_gap(key, other)
+        if gap[0] > CLOSURE_POSITION_TOL or gap[1] > CLOSURE_HEADING_TOL:
+            continue
+        if best_gap is None or gap < best_gap:
+            best, best_gap = other, gap
+    return best
 
 
 def _make_segment(layout: Layout, piece_index: int, route_index: int,

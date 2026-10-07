@@ -339,7 +339,7 @@ class TrackEditor:
         self._scenery_ghost_key: tuple | None = None
         #: 悬停高亮：一件半透明的占地轮廓（房 / 车站是矩形，山 / 树是圆）。
         self._scenery_highlight = base.render.attachNewNode("scenery_highlight")
-        #: 路灯总开关（与 HUD「路灯开/关」同步）；关时不挂 PointLight。
+        #: 夜景总开关（与 HUD「夜景开/关」同步）；关时藏光晕/窗灯并拆环境光。
         self.street_lights_enabled = True
         if self.hud is not None and hasattr(self.hud, "on_toggle_street_lights"):
             self.hud.street_lights_on = True
@@ -702,7 +702,7 @@ class TrackEditor:
         raise ValueError(f"未知的布景物件 {kind!r}")
 
     def set_street_lights_enabled(self, enabled: bool) -> None:
-        """路灯总开关：只改点光，不重烘整份布景网格。"""
+        """夜景总开关：显隐光晕/窗灯与环境光，不重烘整份布景网格。"""
         self.street_lights_enabled = bool(enabled)
         if self.hud is not None and hasattr(self.hud, "street_lights_on"):
             self.hud.street_lights_on = self.street_lights_enabled
@@ -711,7 +711,7 @@ class TrackEditor:
         combined = self.base_scenery.merged(self.user_scenery)
         scenery_mod.attach_street_lights(
             self.base.render, combined, enabled=self.street_lights_enabled)
-        self.notify("路灯：开" if self.street_lights_enabled else "路灯：关")
+        self.notify("夜景：开" if self.street_lights_enabled else "夜景：关")
 
     def _rebuild_scenery(self) -> None:
         """把「底座 + 手工」并成一份，烘成一个节点挂到场景上。"""

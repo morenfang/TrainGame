@@ -95,9 +95,9 @@ class Hud:
         self._pin_box: tuple[float, float, float, float] | None = None
         self._lights_box: tuple[float, float, float, float] | None = None
         self._dock_box: tuple[float, float, float, float] | None = None
-        #: 路灯总开关（默认开）；点左侧「路灯」按钮切换。
+        #: 夜景总开关（默认开）；点左侧「夜景」按钮切换。
         self.street_lights_on = True
-        #: 切换路灯时回调 ``(enabled: bool) -> None``，由编辑器挂灯 / 拆灯。
+        #: 切换夜景时回调 ``(enabled: bool) -> None``，由编辑器显隐光晕 / 窗灯。
         self.on_toggle_street_lights = None
 
         self._tab_root = self.root.attachNewNode("hud_tab")
@@ -129,7 +129,7 @@ class Hud:
         self._lights_bg = self._make_card("lights_bg", (0.18, 0.20, 0.14, 0.92))
         self._lights_bg.reparentTo(self._lights_root)
         self._lights_label = make_label(
-            "路灯", font=self.font, color=(1.0, 0.92, 0.55, 1.0),
+            "夜景", font=self.font, color=(1.0, 0.92, 0.55, 1.0),
             align=TextNode.ACenter,
         )
         self._lights_label.setScale(0.030)
@@ -386,11 +386,11 @@ class Hud:
         self._lights_bg.setPos(tab_x, lights_y, 0.0)
         self._lights_bg.setScale(_TAB_W, lights_h, 1.0)
         if self.street_lights_on:
-            self._lights_label.node().setText("路灯开")
+            self._lights_label.node().setText("夜景开")
             self._lights_label.node().setTextColor(Vec4(1.0, 0.92, 0.55, 1.0))
             self._lights_bg.setColor(Vec4(0.22, 0.24, 0.12, 0.92))
         else:
-            self._lights_label.node().setText("路灯关")
+            self._lights_label.node().setText("夜景关")
             self._lights_label.node().setTextColor(Vec4(0.70, 0.72, 0.76, 1.0))
             self._lights_bg.setColor(Vec4(0.12, 0.13, 0.16, 0.92))
         self._lights_label.setPos(tab_x, lights_y, 0.0)

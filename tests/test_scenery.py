@@ -187,7 +187,7 @@ def test_river_pushes_its_bounds_out_by_the_bank():
 # --------------------------------------------------------------------------- #
 
 def test_build_scenery_bakes_everything_into_one_node(app):
-    """一份布景烘成**一个**节点（一次绘制调用）。"""
+    """主体合批成一个 GeomNode；有房屋时另挂自发光门前灯子节点。"""
     scenery = _sample_scenery().merged(sc.Scenery(
         rivers=(sc.River(points=((-60.0, 60.0), (60.0, 60.0)), width=10.0, seed=9),),
         lakes=(sc.Lake(x=0.0, z=-90.0, radius=30.0, seed=8),),
@@ -197,15 +197,18 @@ def test_build_scenery_bakes_everything_into_one_node(app):
     node = sc.build_scenery(scenery)
     node.reparentTo(app.render)
     assert node.getName() == "scenery"
-    # 烘出来的节点**本身就是** GeomNode（不是套一层空父节点）：没有多余的一层
-    assert node.getNumChildren() == 0
+    # 根节点本身是合批 GeomNode；门前灯头/光晕挂成自发光子节点
     geom_node = node.node()
     assert geom_node.getNumGeoms() == 1
-    # 顶点数走 GeomPrimitive 这一级：``GeomVertexData`` 得从 ``Geom`` 上取，
-    # 而 ``Geom.getVertexData()`` 的签名要的是 thread，不是下标。
     geom = geom_node.getGeom(0)
     assert geom.getNumPrimitives() == 1
     assert geom.getPrimitive(0).getNumPrimitives() > 0
+    if scenery.houses:
+        glow = node.find("street_lamp_glows")
+        panes = node.find("night_windows")
+        assert not glow.isEmpty()
+        assert not panes.isEmpty()
+        assert glow.getName() == "street_lamp_glows"
 
 
 # --------------------------------------------------------------------------- #
@@ -258,9 +261,30 @@ def test_every_house_kind_bakes_renderable_geometry(app, kind):
     node.reparentTo(app.render)
     geom = node.node().getGeom(0)
     assert geom.getPrimitive(0).getNumPrimitives() > 0
+    assert not node.find("street_lamp_glows").isEmpty()
+    assert not node.find("night_windows").isEmpty()
 
 
-def test_attach_street_lights_adds_point_lights(app):
+def test_street_lamp_glow_has_radial_alpha_falloff(app):
+    """门前光晕必须是外沿透明的径向盘，不能再是一整块不透明方贴图。"""
+    from panda3d.core import GeomVertexReader
+
+    node = sc.build_scenery(sc.Scenery(
+        houses=(sc.House(x=0.0, z=0.0, kind=sc.HOUSE_COTTAGE, seed=1),)))
+    glow = node.find("street_lamp_glows")
+    geom = glow.node().getGeom(0)
+    reader = GeomVertexReader(geom.getVertexData(), "color")
+    alphas = []
+    while not reader.isAtEnd():
+        alphas.append(reader.getData4()[3])
+    assert alphas
+    assert min(alphas) < 0.08
+    assert max(alphas) > 0.35
+    assert max(alphas) - min(alphas) > 0.25
+
+
+def test_attach_street_lights_adds_ambient_only(app):
+    """门前灯是自发光子网格；总开关只挂一盏环境光，不按栋挂 PointLight。"""
     scenery = sc.Scenery(houses=(
         sc.House(x=0.0, z=0.0, kind=sc.HOUSE_COTTAGE, seed=1),
         sc.House(x=20.0, z=0.0, kind=sc.HOUSE_TOWER, seed=2,
@@ -268,9 +292,15 @@ def test_attach_street_lights_adds_point_lights(app):
     ))
     node = sc.build_scenery(scenery)
     node.reparentTo(app.render)
+    glow = node.find("street_lamp_glows")
+    panes = node.find("night_windows")
+    assert not glow.isEmpty()
+    assert not panes.isEmpty()
     holder = sc.attach_street_lights(app.render, scenery)
     assert not holder.isEmpty()
-    assert holder.getNumChildren() >= 3  # ambient + ≥2 lamps
+    assert holder.getNumChildren() == 1  # 只有 ambient
+    assert not glow.isHidden()
+    assert not panes.isHidden()
 
 
 def test_reattach_street_lights_does_not_stack(app):
@@ -279,7 +309,6 @@ def test_reattach_street_lights_does_not_stack(app):
         sc.House(x=0.0, z=0.0, kind=sc.HOUSE_COTTAGE, seed=1),
     ))
     sc.attach_street_lights(app.render, scenery)
-    first = app.render.find("street_lights").getNumChildren()
     denser = sc.Scenery(houses=(
         sc.House(x=0.0, z=0.0, kind=sc.HOUSE_COTTAGE, seed=1),
         sc.House(x=15.0, z=0.0, kind=sc.HOUSE_SHOP, seed=2),
@@ -289,12 +318,12 @@ def test_reattach_street_lights_does_not_stack(app):
     sc.attach_street_lights(app.render, denser)
     holders = app.render.findAllMatches("street_lights")
     assert holders.getNumPaths() == 1
-    # ambient + 3 盏；反复 attach 也不该涨到 2× / 3×
-    assert app.render.find("street_lights").getNumChildren() == first + 2
+    # 仍只有一盏环境光，不随房屋数上涨
+    assert app.render.find("street_lights").getNumChildren() == 1
 
 
 def test_street_lamp_pick_defaults_to_every_house():
-    """默认不抽稀：每栋门前灯都进名单，增减房屋也不会挤灭别人。"""
+    """取样辅助仍默认返回全部灯位（兼容旧调用）。"""
     base = [(float(i * 10), 3.0, 0.0) for i in range(20)]
     assert sc.pick_street_lamp_positions(base) == base
     grown = base + [(205.0, 3.0, 0.0)]
@@ -310,25 +339,40 @@ def test_street_lamp_pick_is_stable_when_capped():
     assert len(first & second) >= 7
 
 
-def test_attach_street_lights_lights_every_house(app):
-    houses = tuple(
+def test_attach_street_lights_count_does_not_grow_with_houses(app):
+    """加房子不能再改变动态灯数量（曾经因此此亮彼灭）。"""
+    few = sc.Scenery(houses=tuple(
         sc.House(x=float(i * 12), z=0.0, kind=sc.HOUSE_COTTAGE, seed=i)
-        for i in range(16)
-    )
-    scenery = sc.Scenery(houses=houses)
-    holder = sc.attach_street_lights(app.render, scenery)
-    # ambient + 每栋一盏
-    assert holder.getNumChildren() == 1 + len(houses)
+        for i in range(3)
+    ))
+    many = sc.Scenery(houses=tuple(
+        sc.House(x=float(i * 12), z=0.0, kind=sc.HOUSE_COTTAGE, seed=i)
+        for i in range(24)
+    ))
+    a = sc.attach_street_lights(app.render, few)
+    n_few = a.getNumChildren()
+    b = sc.attach_street_lights(app.render, many)
+    assert b.getNumChildren() == n_few == 1
 
 
 def test_attach_street_lights_respects_enabled_flag(app):
     scenery = sc.Scenery(houses=(
         sc.House(x=0.0, z=0.0, kind=sc.HOUSE_COTTAGE, seed=1),
     ))
+    node = sc.build_scenery(scenery)
+    node.reparentTo(app.render)
+    glow = node.find("street_lamp_glows")
+    panes = node.find("night_windows")
+    assert not glow.isEmpty()
+    assert not panes.isEmpty()
     sc.attach_street_lights(app.render, scenery, enabled=True)
     assert not app.render.find("street_lights").isEmpty()
+    assert not glow.isHidden()
+    assert not panes.isHidden()
     sc.attach_street_lights(app.render, scenery, enabled=False)
     assert app.render.find("street_lights").isEmpty()
+    assert glow.isHidden()
+    assert panes.isHidden()
 @pytest.mark.parametrize("kind,label", list(sc.TREE_KIND_LABELS.items()))
 def test_tree_footprint_label_names_the_kind(kind, label):
     tree = sc.Tree(x=0.0, z=0.0, kind=kind)

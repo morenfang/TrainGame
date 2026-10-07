@@ -194,6 +194,27 @@ def test_an_open_chain_whose_gap_is_real_is_still_not_a_loop(catalog):
     assert abs(report.gap_heading) == pytest.approx(DEG(45.0), rel=1e-9)
 
 
+def test_mid_chain_retrace_of_unwelded_layout_json_stays_closed(catalog):
+    """从环**中段**重走线也必须仍是闭环 —— ``TrainView`` 锚定就这么干。
+
+    只从空闲端口认环不够：列车跑着时会按车尾所在段重走，起点在链中间，
+    走到没焊的缝若当 ``open_end``，路径就降成开链，车照样钉在 #40→#39。
+    """
+    save = Path(__file__).resolve().parent.parent / "saves" / "layout.json"
+    if not save.exists():
+        pytest.skip(f"示例存档不在：{save}")
+
+    layout = Layout.from_dict(
+        json.loads(save.read_text(encoding="utf-8")), catalog)
+    _, path = detect_closure(layout, allow_open=True)
+    assert path is not None and path.closed
+    mid = path.segments[len(path.segments) // 2]
+    retraced = trace(layout, (mid.piece_index, mid.entry_port))
+    assert retraced.closed, "中段重走把未焊环降成开链了"
+    assert len(retraced) == len(path)
+    assert retraced.total_length == pytest.approx(path.total_length, rel=1e-12)
+
+
 def test_the_reported_stall_in_layout_json_is_gone(catalog, green):
     """**用户报的那个 #40 → #39 卡死**：直接拿实盘存档回归。
 

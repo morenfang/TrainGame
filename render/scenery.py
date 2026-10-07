@@ -39,14 +39,24 @@ import random
 from dataclasses import asdict, dataclass, fields
 from typing import Iterator, Sequence
 
-from panda3d.core import AmbientLight, NodePath, PointLight, Vec4
+from panda3d.core import (
+    AmbientLight, ColorBlendAttrib, NodePath, TransparencyAttrib, Vec4,
+)
 
 from render import style
 from render.mesh import MeshBuilder
 
-#: 历史兼容：调用方仍可传 ``max_lights`` 做性能测试；默认不封顶，
-#: 每栋建筑门前都点亮，避免增减房屋时灯位被挤掉看起来像"随机开关"。
+#: 历史兼容参数（``pick_street_lamp_positions`` / 旧测试仍可传）。
+#: 门前照明用自发光径向光晕 + 墙面洗光，**不再**为每栋挂 PointLight ——
+#: Panda3D / OpenGL 同时只能点亮有限盏动态灯，超了就会此亮彼灭，像随机开关。
 _MAX_STREET_LIGHTS: int | None = None
+#: 夜景总开关打开时加的环境光（暖一点，衬光晕与窗灯）。
+_STREET_AMBIENT = (0.28, 0.27, 0.26, 1.0)
+#: 夜景灯光子节点名：径向光晕（加法混合）与窗玻璃 / 灯头（不透明自发光）。
+_GLOW_NODE = "street_lamp_glows"
+_PANE_NODE = "night_windows"
+#: 一栋楼里亮着的窗户比例（按房屋种子抽，不是每帧随机）。
+_WINDOW_LIT_CHANCE = 0.72
 
 #: 无 alpha 的颜色（``shade`` 会原样透传 alpha，布景全是不透明的）。
 Color = tuple[float, float, float, float]
@@ -115,6 +125,131 @@ def _local_quad(builder: MeshBuilder, origin_x: float, origin_z: float,
     normal = None if normal_local is None else _local_dir(
         heading, normal_local[0], normal_local[1], normal_local[2])
     builder.add_polygon(points, color, normal=normal)
+
+
+def _lerp_color(a: Color, b: Color, t: float) -> Color:
+    t = max(0.0, min(1.0, t))
+    return (
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+        a[3] + (b[3] - a[3]) * t,
+    )
+
+
+def _add_unlit_quad(builder: MeshBuilder, origin_x: float, origin_z: float,
+                    heading: float,
+                    local_points: Sequence[tuple[float, float, float]],
+                    colors: Color | Sequence[Color],
+                    normal_local: tuple[float, float, float]) -> None:
+    """不走 ``shade`` 的四边形：顶点色原样写入，用来做光晕 / 夜窗。"""
+    if len(local_points) < 3:
+        return
+    if isinstance(colors[0], (int, float)):
+        vertex_colors: Sequence[Color] = tuple(colors for _ in local_points)  # type: ignore[misc]
+    else:
+        vertex_colors = colors  # type: ignore[assignment]
+        if len(vertex_colors) != len(local_points):
+            vertex_colors = tuple(vertex_colors[0] for _ in local_points)
+    normal = _local_dir(heading, *normal_local)
+    indices = [
+        builder.vertex(_local_to_world(origin_x, origin_z, heading, *p),
+                       normal, color)
+        for p, color in zip(local_points, vertex_colors)
+    ]
+    builder.face(indices)
+
+
+def _add_radial_glow(builder: MeshBuilder, origin_x: float, origin_z: float,
+                     heading: float, cx: float, cy: float, cz: float,
+                     radius: float, center: Color, rim: Color, *,
+                     sides: int = 18, rings: int = 3) -> None:
+    """水平圆盘：中心亮、外沿 alpha→0，看起来才是光晕而不是一块贴图。"""
+    if sides < 3 or radius <= 0.0 or rings < 1:
+        return
+    up = (0.0, 1.0, 0.0)
+    center_i = builder.vertex(
+        _local_to_world(origin_x, origin_z, heading, cx, cy, cz), up, center)
+    prev: list[int] | None = None
+    for ring in range(1, rings + 1):
+        t = ring / rings
+        # 外沿掉得更快，中心一圈更实
+        fall = t * t
+        color = _lerp_color(center, rim, fall)
+        indices: list[int] = []
+        for k in range(sides):
+            ang = math.tau * k / sides
+            lx = cx + math.cos(ang) * radius * t
+            lz = cz + math.sin(ang) * radius * t
+            indices.append(builder.vertex(
+                _local_to_world(origin_x, origin_z, heading, lx, cy, lz),
+                up, color))
+        if prev is None:
+            for k in range(sides):
+                builder.triangle(center_i, indices[k], indices[(k + 1) % sides])
+        else:
+            for k in range(sides):
+                n = (k + 1) % sides
+                builder.triangle(prev[k], indices[k], indices[n])
+                builder.triangle(prev[k], indices[n], prev[n])
+        prev = indices
+
+
+def _window_lit(rng: random.Random) -> bool:
+    return rng.random() < _WINDOW_LIT_CHANCE
+
+
+def _lit_window_color(rng: random.Random) -> Color:
+    return style.WINDOW_LIT_COLOR if rng.random() < 0.55 else style.WINDOW_LIT_DIM
+
+
+def _add_lit_pane(builder: MeshBuilder | None, rng: random.Random,
+                  origin_x: float, origin_z: float, heading: float,
+                  x0: float, x1: float, y0: float, y1: float,
+                  z0: float, z1: float, face: str) -> None:
+    """在已有窗玻璃外侧贴一块夜景发光面（略抬出，避免 z-fighting）。"""
+    if builder is None or not _window_lit(rng):
+        return
+    color = _lit_window_color(rng)
+    eps = 0.05
+    if face == "-z":
+        zf = min(z0, z1) - eps
+        pts = ((x0, y0, zf), (x1, y0, zf), (x1, y1, zf), (x0, y1, zf))
+        normal = (0.0, 0.0, -1.0)
+    elif face == "+z":
+        zf = max(z0, z1) + eps
+        pts = ((x1, y0, zf), (x0, y0, zf), (x0, y1, zf), (x1, y1, zf))
+        normal = (0.0, 0.0, 1.0)
+    elif face == "+x":
+        xf = max(x0, x1) + eps
+        pts = ((xf, y0, z0), (xf, y0, z1), (xf, y1, z1), (xf, y1, z0))
+        normal = (1.0, 0.0, 0.0)
+    else:
+        xf = min(x0, x1) - eps
+        pts = ((xf, y0, z1), (xf, y0, z0), (xf, y1, z0), (xf, y1, z1))
+        normal = (-1.0, 0.0, 0.0)
+    _add_unlit_quad(builder, origin_x, origin_z, heading, pts, color, normal)
+
+
+def _attach_unlit_child(parent: NodePath, builder: MeshBuilder, name: str,
+                        *, additive: bool) -> None:
+    if not builder:
+        return
+    node = builder.build()
+    node.setName(name)
+    node.setLightOff(1)
+    if additive:
+        node.setTransparency(TransparencyAttrib.MAlpha)
+        node.setAttrib(ColorBlendAttrib.make(
+            ColorBlendAttrib.MAdd,
+            ColorBlendAttrib.OIncomingAlpha,
+            ColorBlendAttrib.OOne,
+        ))
+        node.setDepthWrite(False)
+        node.setBin("transparent", 40)
+    else:
+        node.setTransparency(TransparencyAttrib.MAlpha)
+    node.reparentTo(parent)
 
 
 # --------------------------------------------------------------------------- #
@@ -1178,26 +1313,35 @@ def _add_tree_cypress(builder: MeshBuilder, tree: Tree, rng: random.Random,
               radius=height * 0.11, height=height * 0.85, sides=8, color=leaf)
 
 
-def _add_house(builder: MeshBuilder, house: House) -> None:
-    """一座建筑：按 ``house.kind`` 分派；门前再立一盏路灯。"""
+def _add_house(builder: MeshBuilder, house: House,
+               glow_builder: MeshBuilder | None = None,
+               pane_builder: MeshBuilder | None = None) -> None:
+    """一座建筑：按 ``house.kind`` 分派；门前再立一盏路灯。
+
+    ``glow_builder`` 收径向光晕 / 墙面洗光；``pane_builder`` 收灯头与夜景窗。
+    没给时（幽灵预览）都进 ``builder``。
+    """
+    panes = pane_builder if pane_builder is not None else glow_builder
     if house.kind == HOUSE_TOWER:
-        _add_house_tower(builder, house)
+        _add_house_tower(builder, house, pane_builder=panes)
     elif house.kind == HOUSE_MALL:
-        _add_house_mall(builder, house)
+        _add_house_mall(builder, house, pane_builder=panes)
     elif house.kind == HOUSE_SHOP:
-        _add_house_shop(builder, house)
+        _add_house_shop(builder, house, pane_builder=panes)
     elif house.kind == HOUSE_SLAB:
-        _add_house_slab(builder, house)
+        _add_house_slab(builder, house, pane_builder=panes)
     elif house.kind == HOUSE_BLOCK:
-        _add_house_block(builder, house)
+        _add_house_block(builder, house, pane_builder=panes)
     elif house.kind == HOUSE_VILLA:
-        _add_house_villa(builder, house)
+        _add_house_villa(builder, house, pane_builder=panes)
     else:
-        _add_house_cottage(builder, house)
-    _add_street_lamp_mesh(builder, house)
+        _add_house_cottage(builder, house, pane_builder=panes)
+    _add_street_lamp_mesh(builder, house, glow_builder=glow_builder,
+                          pane_builder=panes)
 
 
-def _add_house_cottage(builder: MeshBuilder, house: House) -> None:
+def _add_house_cottage(builder: MeshBuilder, house: House,
+                       pane_builder: MeshBuilder | None = None) -> None:
     """普通民房：主体 + 双坡屋顶 + 门 + 窗（+ 一半概率的烟囱）。"""
     rng = random.Random(house.seed)
     wall = style.HOUSE_WALL_COLORS[rng.randrange(len(style.HOUSE_WALL_COLORS))]
@@ -1249,6 +1393,9 @@ def _add_house_cottage(builder: MeshBuilder, house: House) -> None:
                        slot_x - 0.70, slot_x + 0.70, win_y0, win_y1,
                        -half_d - 0.02, -half_d + 0.08,
                        style.HOUSE_WINDOW_COLOR, top_color=style.HOUSE_WINDOW_COLOR)
+            _add_lit_pane(pane_builder, rng, x, z, heading,
+                          slot_x - 0.70, slot_x + 0.70, win_y0, win_y1,
+                          -half_d - 0.02, -half_d + 0.08, "-z")
 
     if rng.random() < 0.5:
         chimney = 0.45
@@ -1259,7 +1406,8 @@ def _add_house_cottage(builder: MeshBuilder, house: House) -> None:
 
 def _add_house_glazing(builder: MeshBuilder, house: House, *,
                        wall_color, glass_color, roof_color,
-                       floor_pitch: float = 3.2) -> None:
+                       floor_pitch: float = 3.2,
+                       pane_builder: MeshBuilder | None = None) -> None:
     """共用：主体盒子 + 女儿墙 + 四面玻璃开间。"""
     base_y = style.GROUND_Y + style.SCENERY_LIFT
     half_w, half_d = house.width * 0.5, house.depth * 0.5
@@ -1280,6 +1428,7 @@ def _add_house_glazing(builder: MeshBuilder, house: House, *,
     depth_bays = max(1, int(house.depth // 3.2))
     depth_step = house.depth / max(1, depth_bays)
     win_half = min(1.05, bay_step * 0.38)
+    rng = random.Random(house.seed)
     for f in range(floors):
         y0 = base_y + 0.85 + f * floor_pitch
         y1 = y0 + min(1.85, floor_pitch * 0.55)
@@ -1290,20 +1439,33 @@ def _add_house_glazing(builder: MeshBuilder, house: House, *,
             _local_box(builder, x, z, heading, wx - win_half, wx + win_half,
                        y0, y1, -half_d - 0.02, -half_d + 0.07,
                        glass_color, top_color=glass_color)
+            _add_lit_pane(pane_builder, rng, x, z, heading,
+                          wx - win_half, wx + win_half, y0, y1,
+                          -half_d - 0.02, -half_d + 0.07, "-z")
             _local_box(builder, x, z, heading, wx - win_half, wx + win_half,
                        y0, y1, half_d - 0.07, half_d + 0.02,
                        glass_color, top_color=glass_color)
+            _add_lit_pane(pane_builder, rng, x, z, heading,
+                          wx - win_half, wx + win_half, y0, y1,
+                          half_d - 0.07, half_d + 0.02, "+z")
         for k in range(depth_bays):
             wz = -half_d + depth_step * (k + 0.5)
             _local_box(builder, x, z, heading, half_w - 0.07, half_w + 0.02,
                        y0, y1, wz - win_half, wz + win_half,
                        glass_color, top_color=glass_color)
+            _add_lit_pane(pane_builder, rng, x, z, heading,
+                          half_w - 0.07, half_w + 0.02, y0, y1,
+                          wz - win_half, wz + win_half, "+x")
             _local_box(builder, x, z, heading, -half_w - 0.02, -half_w + 0.07,
                        y0, y1, wz - win_half, wz + win_half,
                        glass_color, top_color=glass_color)
+            _add_lit_pane(pane_builder, rng, x, z, heading,
+                          -half_w - 0.02, -half_w + 0.07, y0, y1,
+                          wz - win_half, wz + win_half, "-x")
 
 
-def _add_house_tower(builder: MeshBuilder, house: House) -> None:
+def _add_house_tower(builder: MeshBuilder, house: House,
+                     pane_builder: MeshBuilder | None = None) -> None:
     """高楼：玻璃幕墙塔楼（高矮胖瘦由 House 尺寸决定）。"""
     _add_house_glazing(
         builder, house,
@@ -1311,10 +1473,12 @@ def _add_house_tower(builder: MeshBuilder, house: House) -> None:
         glass_color=style.HOUSE_TOWER_GLASS_COLOR,
         roof_color=style.HOUSE_TOWER_ROOF_COLOR,
         floor_pitch=3.15,
+        pane_builder=pane_builder,
     )
 
 
-def _add_house_slab(builder: MeshBuilder, house: House) -> None:
+def _add_house_slab(builder: MeshBuilder, house: House,
+                    pane_builder: MeshBuilder | None = None) -> None:
     """板楼：沿 width 拉得很长的住宅楼。"""
     _add_house_glazing(
         builder, house,
@@ -1322,10 +1486,12 @@ def _add_house_slab(builder: MeshBuilder, house: House) -> None:
         glass_color=style.HOUSE_SLAB_GLASS_COLOR,
         roof_color=style.HOUSE_TOWER_ROOF_COLOR,
         floor_pitch=3.0,
+        pane_builder=pane_builder,
     )
 
 
-def _add_house_block(builder: MeshBuilder, house: House) -> None:
+def _add_house_block(builder: MeshBuilder, house: House,
+                     pane_builder: MeshBuilder | None = None) -> None:
     """矮胖公寓：层高略矮、墙色带种子变化。"""
     rng = random.Random(house.seed)
     wall = style.HOUSE_BLOCK_WALL_COLORS[
@@ -1336,10 +1502,12 @@ def _add_house_block(builder: MeshBuilder, house: House) -> None:
         glass_color=style.HOUSE_TOWER_GLASS_COLOR,
         roof_color=style.HOUSE_TOWER_ROOF_COLOR,
         floor_pitch=2.85,
+        pane_builder=pane_builder,
     )
 
 
-def _add_house_villa(builder: MeshBuilder, house: House) -> None:
+def _add_house_villa(builder: MeshBuilder, house: House,
+                     pane_builder: MeshBuilder | None = None) -> None:
     """两层别墅：浅色墙 + 双坡顶 + 门廊。"""
     rng = random.Random(house.seed)
     wall = style.HOUSE_VILLA_WALL_COLORS[
@@ -1384,10 +1552,21 @@ def _add_house_villa(builder: MeshBuilder, house: House) -> None:
                        slot_x - 0.75, slot_x + 0.75, win_y0, win_y1,
                        -half_d - 0.02, -half_d + 0.08,
                        style.HOUSE_WINDOW_COLOR, top_color=style.HOUSE_WINDOW_COLOR)
+            _add_lit_pane(pane_builder, rng, x, z, heading,
+                          slot_x - 0.75, slot_x + 0.75, win_y0, win_y1,
+                          -half_d - 0.02, -half_d + 0.08, "-z")
 
 
-def _add_street_lamp_mesh(builder: MeshBuilder, house: House) -> None:
-    """门前一盏路灯：灯柱 + 灯头 + 贴地光晕。"""
+def _add_street_lamp_mesh(builder: MeshBuilder, house: House,
+                          *, glow_builder: MeshBuilder | None = None,
+                          pane_builder: MeshBuilder | None = None) -> None:
+    """门前一盏路灯：灯柱（受光）+ 灯头 + 径向光晕 + 墙面洗光。
+
+    光晕进 ``glow_builder``（加法混合）；灯头进 ``pane_builder``。没给时整盏
+    灯都进 ``builder``（幽灵预览）。
+    """
+    glow = glow_builder if glow_builder is not None else builder
+    panes = pane_builder if pane_builder is not None else glow
     base_y = style.GROUND_Y + style.SCENERY_LIFT
     half_w, half_d = house.width * 0.5, house.depth * 0.5
     x, z, heading = house.x, house.z, house.heading
@@ -1398,23 +1577,40 @@ def _add_street_lamp_mesh(builder: MeshBuilder, house: House) -> None:
         _local_to_world(x, z, heading, lamp_x, base_y, lamp_z),
         _local_to_world(x, z, heading, lamp_x, base_y + post_h, lamp_z),
         0.09, 6, style.LAMP_POST_COLOR)
-    _local_box(builder, x, z, heading,
-               lamp_x - 0.32, lamp_x + 0.32,
-               base_y + post_h - 0.22, base_y + post_h + 0.12,
-               lamp_z - 0.26, lamp_z + 0.26,
+    _local_box(panes, x, z, heading,
+               lamp_x - 0.22, lamp_x + 0.22,
+               base_y + post_h - 0.20, base_y + post_h + 0.14,
+               lamp_z - 0.22, lamp_z + 0.22,
                style.LAMP_HEAD_COLOR, top_color=style.LAMP_HEAD_COLOR)
-    # 贴地暖色光晕（半径约 3.5 m）
-    glow_r = 3.5
-    glow_y = base_y + 0.04
-    _local_quad(builder, x, z, heading,
-                ((lamp_x - glow_r, glow_y, lamp_z - glow_r),
-                 (lamp_x + glow_r, glow_y, lamp_z - glow_r),
-                 (lamp_x + glow_r, glow_y, lamp_z + glow_r),
-                 (lamp_x - glow_r, glow_y, lamp_z + glow_r)),
-                style.LAMP_GLOW_COLOR, normal_local=(0.0, 1.0, 0.0))
+    glow_y = base_y + 0.06
+    _add_radial_glow(glow, x, z, heading, lamp_x, glow_y, lamp_z,
+                     7.5, style.LAMP_GLOW_CENTER, style.LAMP_GLOW_RIM,
+                     sides=20, rings=4)
+    _add_radial_glow(glow, x, z, heading, lamp_x, glow_y + 0.02, lamp_z,
+                     2.4, style.LAMP_GLOW_HOT, style.LAMP_GLOW_RIM,
+                     sides=14, rings=3)
+    _add_radial_glow(glow, x, z, heading, lamp_x, base_y + post_h + 0.02, lamp_z,
+                     1.15, style.LAMP_GLOW_HOT, style.LAMP_GLOW_RIM,
+                     sides=12, rings=2)
+    wall_z = -half_d - 0.08
+    wash_w, wash_h = 5.5, 4.8
+    cx = lamp_x
+    mid = style.LAMP_WASH_COLOR
+    rim = (mid[0], mid[1], mid[2], 0.0)
+    _add_unlit_quad(
+        glow, x, z, heading,
+        ((cx - wash_w, base_y, wall_z), (cx, base_y, wall_z),
+         (cx, base_y + wash_h, wall_z), (cx - wash_w, base_y + wash_h, wall_z)),
+        (rim, mid, rim, rim), (0.0, 0.0, -1.0))
+    _add_unlit_quad(
+        glow, x, z, heading,
+        ((cx, base_y, wall_z), (cx + wash_w, base_y, wall_z),
+         (cx + wash_w, base_y + wash_h, wall_z), (cx, base_y + wash_h, wall_z)),
+        (mid, rim, rim, rim), (0.0, 0.0, -1.0))
 
 
-def _add_house_mall(builder: MeshBuilder, house: House) -> None:
+def _add_house_mall(builder: MeshBuilder, house: House,
+                    pane_builder: MeshBuilder | None = None) -> None:
     """商场：宽扁的体量 + 正面整面橱窗 + 门头招牌 + 出挑平檐。"""
     wall = style.HOUSE_MALL_WALL_COLOR
     glass = style.HOUSE_MALL_GLASS_COLOR
@@ -1431,6 +1627,15 @@ def _add_house_mall(builder: MeshBuilder, house: House) -> None:
     _local_box(builder, x, z, heading, -half_w + 0.6, half_w - 0.6,
                base_y + 0.5, top - 1.3, -half_d - 0.02, -half_d + 0.08,
                glass, top_color=glass)
+    rng = random.Random(house.seed)
+    bays = max(3, int(house.width // 4.0))
+    bay_w = (house.width - 1.2) / bays
+    for k in range(bays):
+        wx0 = -half_w + 0.6 + k * bay_w + 0.08
+        wx1 = wx0 + bay_w - 0.16
+        _add_lit_pane(pane_builder, rng, x, z, heading,
+                      wx0, wx1, base_y + 0.5, top - 1.3,
+                      -half_d - 0.02, -half_d + 0.08, "-z")
     # 门头招牌带
     _local_box(builder, x, z, heading, -half_w + 1.0, half_w - 1.0,
                top - 1.3, top - 0.35, -half_d - 0.06, -half_d + 0.02,
@@ -1443,7 +1648,8 @@ def _add_house_mall(builder: MeshBuilder, house: House) -> None:
                -half_d - overhang, half_d + overhang, wall, top_color=wall)
 
 
-def _add_house_shop(builder: MeshBuilder, house: House) -> None:
+def _add_house_shop(builder: MeshBuilder, house: House,
+                    pane_builder: MeshBuilder | None = None) -> None:
     """便利店：小门脸 + 前檐遮阳篷 + 门头招牌。"""
     wall = style.HOUSE_SHOP_WALL_COLOR
     awning = style.HOUSE_SHOP_AWNING_COLOR
@@ -1469,11 +1675,17 @@ def _add_house_shop(builder: MeshBuilder, house: House) -> None:
                -half_d - 0.03, -half_d + 0.10,
                style.HOUSE_DOOR_COLOR, top_color=style.HOUSE_DOOR_COLOR)
     # 两侧橱窗
+    rng = random.Random(house.seed)
     for slot in (-1, 1):
+        wx0 = slot * half_w * 0.62 - 0.7
+        wx1 = slot * half_w * 0.62 + 0.7
         _local_box(builder, x, z, heading,
-                   slot * half_w * 0.62 - 0.7, slot * half_w * 0.62 + 0.7,
+                   wx0, wx1,
                    base_y + 0.5, base_y + 1.9, -half_d - 0.02, -half_d + 0.06,
                    style.HOUSE_WINDOW_COLOR, top_color=style.HOUSE_WINDOW_COLOR)
+        _add_lit_pane(pane_builder, rng, x, z, heading,
+                      wx0, wx1, base_y + 0.5, base_y + 1.9,
+                      -half_d - 0.02, -half_d + 0.06, "-z")
 
 
 def _local_polygon_wall_gable(builder: MeshBuilder, x: float, z: float,
@@ -1691,13 +1903,14 @@ def _add_platform(builder: MeshBuilder, platform: Platform) -> None:
 
 
 def build_scenery(scenery: Scenery, *, name: str = "scenery") -> NodePath:
-    """把一份布景烘成**一个** :class:`NodePath`（一个 GeomNode = 一次绘制调用）。
+    """把一份布景烘成节点：主体一批；夜景光晕 / 窗灯另挂自发光子节点。
 
-    布景全是静态几何，逐件建节点只会白白多出几百次绘制调用；合成一个之后，四个
-    场景的布景加起来也只是一个节点。灯柱几何也烘进去；真正的 ``PointLight`` 由
-    :func:`attach_street_lights` 另外挂（数量有上限）。
+    主体合批成一个 GeomNode。径向光晕走加法混合（``street_lamp_glows``）；
+    灯头与夜景窗走不透明自发光（``night_windows``）。都不挂 PointLight。
     """
     builder = MeshBuilder(name)
+    glow = MeshBuilder(f"{name}_lamps")
+    panes = MeshBuilder(f"{name}_panes")
     for meadow in scenery.meadows:
         _add_meadow(builder, meadow)
     for river in scenery.rivers:
@@ -1709,7 +1922,7 @@ def build_scenery(scenery: Scenery, *, name: str = "scenery") -> NodePath:
     for tree in scenery.trees:
         _add_tree(builder, tree)
     for house in scenery.houses:
-        _add_house(builder, house)
+        _add_house(builder, house, glow_builder=glow, pane_builder=panes)
     for station in scenery.stations:
         if station.style == STATION_MODERN:
             _add_station_modern(builder, station)
@@ -1721,6 +1934,8 @@ def build_scenery(scenery: Scenery, *, name: str = "scenery") -> NodePath:
         _add_platform(builder, platform)
     node = builder.build()
     node.setName(name)
+    _attach_unlit_child(node, glow, _GLOW_NODE, additive=True)
+    _attach_unlit_child(node, panes, _PANE_NODE, additive=False)
     node.setPythonTag("street_lamp_positions",
                       [house.street_lamp_world() for house in scenery.houses])
     return node
@@ -1776,44 +1991,25 @@ def pick_street_lamp_positions(
 def attach_street_lights(root: NodePath, scenery: Scenery | None = None,
                          *, max_lights: int | None = _MAX_STREET_LIGHTS,
                          enabled: bool = True) -> NodePath | None:
-    """在 ``root`` 下挂暖色路灯 ``PointLight`` + 一点环境光。
+    """夜景总开关：环境光 + 显隐门前光晕 / 窗灯；**不**挂每栋 ``PointLight``。
 
-    默认每栋建筑门前一盏都点亮。``scenery`` 有就按房屋门前取样；否则读节点上
-    ``street_lamp_positions`` 标签。``enabled=False`` 时只拆灯、不挂新的
-    （总开关关掉）。可反复调用：旧灯会先拆干净再挂新的。
+    开：显示径向光晕与夜景窗，并挂暖色环境光；关：藏起发光层、拆环境光。灯柱仍在。
     """
+    del scenery, max_lights
     detach_street_lights(root)
+    for name in (_GLOW_NODE, _PANE_NODE):
+        for overlay in root.findAllMatches(f"**/{name}"):
+            if enabled:
+                overlay.show()
+            else:
+                overlay.hide()
     if not enabled:
         return None
     holder = root.attachNewNode("street_lights")
-
     ambient = AmbientLight("scenery_ambient")
-    ambient.setColor(Vec4(0.28, 0.29, 0.32, 1.0))
+    ambient.setColor(Vec4(*_STREET_AMBIENT))
     ambient_np = holder.attachNewNode(ambient)
     root.setLight(ambient_np)
-
-    positions: list[tuple[float, float, float]]
-    if scenery is not None and scenery.houses:
-        positions = [h.street_lamp_world() for h in scenery.houses]
-    else:
-        tagged = root.find("**/scenery").getPythonTag("street_lamp_positions") \
-            if not root.find("**/scenery").isEmpty() else None
-        if tagged is None:
-            tagged = root.getPythonTag("street_lamp_positions")
-        positions = list(tagged or ())
-
-    positions = pick_street_lamp_positions(positions, max_lights)
-
-    for index, (px, py, pz) in enumerate(positions):
-        lamp = PointLight(f"street_lamp_{index}")
-        lamp.setColor(Vec4(1.00, 0.92, 0.75, 1.0))
-        # 常数 + 二次衰减：近处亮、十几米外就弱
-        lamp.setAttenuation((1.0, 0.0, 0.009))
-        if hasattr(lamp, "setMaxDistance"):
-            lamp.setMaxDistance(34.0)
-        np = holder.attachNewNode(lamp)
-        np.setPos(px, py, pz)
-        root.setLight(np)
     return holder
 
 
