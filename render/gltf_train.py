@@ -32,6 +32,7 @@ from panda3d.core import (
     NodePath,
     Point3,
     ShadeModelAttrib,
+    TextureAttrib,
     Vec4,
 )
 
@@ -180,6 +181,69 @@ def _lift_dark_materials(root: NodePath, floor: float = 0.62,
                 lifted.setMetallic(max(0.15, lifted.getMetallic() * 0.6))
             geom_node.setGeomState(
                 index, state.setAttrib(MaterialAttrib.make(lifted)))
+
+
+def _fix_paint_metallic(root: NodePath) -> None:
+    """油漆车体被标成 metallic=1 时，PBR 只剩镜面、侧面就变全黑。
+
+    glTF 里 Hall 这类深红贴图 + metal≈1：对着光像黑铁，侧光更糟。
+    有 Base Color 贴图的按喷漆处理：压金属度、去掉 MetalRough 贴图干扰。
+    """
+    for found in root.findAllMatches("**/+GeomNode"):
+        geom_node = found.node()
+        if not isinstance(geom_node, GeomNode):
+            continue
+        for index in range(geom_node.getNumGeoms()):
+            state = geom_node.getGeomState(index)
+            mat_attr = state.getAttrib(MaterialAttrib)
+            tex_attr = state.getAttrib(TextureAttrib)
+            if mat_attr is None:
+                continue
+            material = mat_attr.getMaterial()
+            if material is None:
+                continue
+            has_albedo = False
+            if tex_attr is not None:
+                for stage_i in range(tex_attr.getNumOnStages()):
+                    stage = tex_attr.getOnStage(stage_i)
+                    name = stage.getName().lower()
+                    if "metal" in name or "rough" in name:
+                        continue
+                    if tex_attr.getOnTexture(stage) is not None:
+                        has_albedo = True
+                        break
+            metal = material.getMetallic() if hasattr(material, "getMetallic") else 0.0
+            # 纯色黄铜零件（无贴图、本身偏金）保留金属感
+            if not has_albedo and metal > 0.5:
+                continue
+            if not has_albedo and metal < 0.5:
+                continue
+            fixed = Material(material)
+            if hasattr(fixed, "setMetallic"):
+                fixed.setMetallic(min(metal, 0.12))
+            if hasattr(fixed, "setRoughness"):
+                rough = fixed.getRoughness()
+                # 喷漆不要镜面黑：粗糙度落到半哑光
+                if rough < 0.35 or rough > 0.92:
+                    fixed.setRoughness(0.62)
+            state = state.setAttrib(MaterialAttrib.make(fixed))
+            # MetalRough 贴图里 B 通道常接近 1，会把油漆又刷回全金属
+            if tex_attr is not None and has_albedo:
+                cleaned = TextureAttrib.make()
+                kept = 0
+                for stage_i in range(tex_attr.getNumOnStages()):
+                    stage = tex_attr.getOnStage(stage_i)
+                    name = stage.getName().lower()
+                    if "metal" in name or "rough" in name:
+                        continue
+                    tex = tex_attr.getOnTexture(stage)
+                    if tex is None:
+                        continue
+                    cleaned = cleaned.addOnStage(stage, tex)
+                    kept += 1
+                if kept:
+                    state = state.setAttrib(cleaned)
+            geom_node.setGeomState(index, state)
 
 def _long_axis(dx: float, dy: float, dz: float) -> str:
     """包围盒最长边是哪一根轴。"""
@@ -457,6 +521,7 @@ def _prepare_car(empty: NodePath, role_yaw_deg: float) -> NodePath:
     high = Point3()
     template.calcTightBounds(low, high)
     inner.setY(inner.getY() - low.y)
+    _fix_paint_metallic(template)
     return template
 
 
@@ -543,14 +608,20 @@ def cars_for(spec: TrainSpec, on_progress=None) -> tuple[NodePath, ...] | None:
     return picked or None
 
 
-def light_train(root: NodePath) -> NodePath:
-    """只照亮这一列车。灯挂在列车根的**兄弟**节点上，不占车厢子节点。"""
+def light_train(root: NodePath, *, brighten: float = 1.38,
+                ambient_boost: float = 1.0) -> NodePath:
+    """只照亮这一列车。灯挂在列车根的**兄弟**节点上，不占车厢子节点。
+
+    ``brighten``：整体 ColorScale。银白动车组偏暗要抬到 ~1.38；蒸汽 /
+    深红机车用 ~1.35，并靠 ``ambient_boost`` 把暗面托住，避免侧光变黑。
+    """
     existing = root.getPythonTag("gltf_light_holder")
     if existing:
         return existing
     holder = root.getParent().attachNewNode(f"gltf_lights_{root.getName()}")
     ambient = AmbientLight("train_ambient")
-    ambient.setColor((0.62, 0.63, 0.65, 1.0))
+    amb = min(0.92, 0.62 * ambient_boost)
+    ambient.setColor((amb, amb * 0.98, amb * 0.96, 1.0))
     ambient_np = holder.attachNewNode(ambient)
     root.setLight(ambient_np)
 
@@ -564,7 +635,8 @@ def light_train(root: NodePath) -> NodePath:
     root.setLight(sun_np)
 
     fill = DirectionalLight("train_fill")
-    fill.setColor((0.42, 0.45, 0.48, 1.0))
+    fill_c = min(0.72, 0.48 * ambient_boost)
+    fill.setColor((fill_c, fill_c * 1.02, fill_c * 1.05, 1.0))
     fill_np = holder.attachNewNode(fill)
     fill_np.setPos(-style.SUN_DIR[0] * 120.0,
                    style.SUN_DIR[1] * 80.0,
@@ -572,8 +644,8 @@ def light_train(root: NodePath) -> NodePath:
     fill_np.lookAt(0.0, 0.0, 0.0)
     root.setLight(fill_np)
 
-    # 贴图车体也整体提亮、偏白一点
-    root.setColorScale(1.38, 1.35, 1.30, 1.0)
+    # 贴图车体也整体提亮一点
+    root.setColorScale(brighten, brighten * 0.98, brighten * 0.94, 1.0)
     smooth = getattr(ShadeModelAttrib, "MSmooth", None) or getattr(
         ShadeModelAttrib, "M_smooth", 1)
     root.setAttrib(ShadeModelAttrib.make(smooth))

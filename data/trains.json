@@ -394,10 +394,62 @@
         "nose": { "length": 0.12, "end_scale": 0.97, "power": 1.0, "pivot_height": 1.80, "ends": "both" }
       }
     },
+    "cr400bf_lajitong_end": {
+      "name": "复兴号垃圾桶 400BF 头车",
+      "length": 15.7,
+      "bogie_half_spacing": 5.5,
+      "mass_kg": 45500,
+      "powered": true,
+      "roof_gear": "ac",
+      "livery": { "body": "#E8F0E4", "band": "#2E7D32", "roof": "#BFC5CA" },
+      "shape": {
+        "profile": [
+          [0.00, 1.00],
+          [1.00, 1.00],
+          [1.30, 1.20],
+          [1.40, 1.66],
+          [1.40, 2.44],
+          [1.34, 2.96],
+          [1.20, 3.30],
+          [0.92, 3.50],
+          [0.00, 3.58]
+        ],
+        "nose": { "length": 1.55, "end_scale": 0.13, "power": 1.05, "pivot_height": 1.55, "ends": "forward" },
+        "windows": { "y": [2.00, 2.78], "count": 6, "width": 0.88, "pitch": 1.20 },
+        "doors": { "y": [1.00, 2.78], "per_end": 1, "width": 0.62, "inset": 0.52 },
+        "stripe": [1.50, 1.95]
+      }
+    },
+    "cr400bf_lajitong_mid": {
+      "name": "复兴号垃圾桶 400BF 中间车",
+      "length": 20.0,
+      "bogie_half_spacing": 7.0,
+      "mass_kg": 46000,
+      "powered": true,
+      "roof_gear": "pantograph",
+      "livery": { "body": "#E8F0E4", "band": "#2E7D32", "roof": "#BFC5CA" },
+      "shape": {
+        "profile": [
+          [0.00, 1.00],
+          [1.00, 1.00],
+          [1.30, 1.20],
+          [1.40, 1.66],
+          [1.40, 2.44],
+          [1.34, 2.96],
+          [1.20, 3.30],
+          [0.92, 3.50],
+          [0.00, 3.58]
+        ],
+        "nose": { "length": 0.18, "end_scale": 0.97, "power": 1.0, "pivot_height": 2.10, "ends": "both" },
+        "windows": { "y": [2.00, 2.78], "count": 10, "width": 0.92, "pitch": 1.55 },
+        "doors": { "y": [1.00, 2.78], "per_end": 1, "width": 0.62, "inset": 0.52 },
+        "stripe": [1.50, 1.95]
+      }
+    },
     "gwr_hall_loco": {
       "name": "GWR 4900 Hall Class 蒸汽机车",
-      "length": 7.6,
-      "bogie_half_spacing": 2.6,
+      "length": 17.5,
+      "bogie_half_spacing": 6.0,
       "mass_kg": 126000,
       "powered": true,
       "roof_gear": "fans",
@@ -416,8 +468,8 @@
     },
     "gwr_black_wagon": {
       "name": "黑色棚车",
-      "length": 4.7,
-      "bogie_half_spacing": 1.55,
+      "length": 9.9,
+      "bogie_half_spacing": 3.1,
       "mass_kg": 22000,
       "powered": false,
       "roof_gear": "ac",
@@ -488,9 +540,9 @@
       "davis": [0.010, 1.1e-4, 1.4e-5],
       "max_speed_kmh": 250,
       "formation": [
-        ["cr400bf_hsd_end", 1],
-        ["cr400bf_hsd_mid", 6],
-        ["cr400bf_hsd_end", 1]
+        ["cr400bf_lajitong_end", 1],
+        ["cr400bf_lajitong_mid", 6],
+        ["cr400bf_lajitong_end", 1]
       ]
     },
     {

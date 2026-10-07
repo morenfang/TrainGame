@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "models" / "glbxz-com-0000083178-1.glb"
 OUT = ROOT / "models" / "CR400BF_LaJiTong_8car.glb"
 TARGET_HEIGHT = 3.5 * 1.15
-TARGET_LEN = 25.0
+TARGET_LEN = 50.0
 TARGET_W = 3.05
 
 

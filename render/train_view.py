@@ -131,7 +131,16 @@ class TrainView:
         if gltf_cars is not None:
             if on_progress is not None:
                 on_progress("挂到场景…", 0.97)
-            self._light_holder = gltf_train.light_train(self.root)
+            mesh_name = (self.spec.mesh or "").lower()
+            # 深红蒸汽机车：提亮 + 加强环境光，侧光不再塌成黑铁
+            is_steam = any(
+                key in mesh_name for key in ("gwr", "hall", "steam", "freight")
+            )
+            brighten = 1.35 if is_steam else 1.38
+            ambient_boost = 1.45 if is_steam else 1.0
+            self._light_holder = gltf_train.light_train(
+                self.root, brighten=brighten, ambient_boost=ambient_boost,
+            )
             for index, (car, template) in enumerate(zip(self.spec.cars, gltf_cars)):
                 node = template.copyTo(self.root)
                 node.setName(f"car_{index}_{car.id}")
