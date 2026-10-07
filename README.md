@@ -103,8 +103,10 @@ dist\TrainGame.exe --list-scenes          另开一个命令行窗口列出所�
 |---|---|
 | **复兴号黄丝带 400BF · 8 辆** | `.glb` 外观 |
 | **复兴号黄丝带 400BF · 16 辆** | 两列 8 节重联，中间两头车鼻锥对顶 |
+| **复兴号垃圾桶 400BF · 8 辆** | `.glb` 外观 |
+| **GWR 4900 Hall · 机车+18 节货车** | 蒸汽机车牵引 18 节黑色棚车 |
 
-按 `N` 只在这两档间切换。新车：glb 放进 [`models/`](models/)，在 [`data/trains.json`](data/trains.json) 加编组并写 `"mesh"`；见 [`render/gltf_train.py`](render/gltf_train.py)。
+按 `N` 在这四档间切换。新车：glb 放进 [`models/`](models/)，在 [`data/trains.json`](data/trains.json) 加编组并写 `"mesh"`；见 [`render/gltf_train.py`](render/gltf_train.py)。
 
 ## 操作速查
 

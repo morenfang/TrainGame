@@ -38,10 +38,12 @@ def catalog() -> TrainCatalog:
 # --------------------------------------------------------------------------- #
 
 def test_builtin_catalog_has_huangsidai_trains(catalog):
-    """内置目录只挂黄丝带 8/16 两列 glb 编组。"""
-    assert len(catalog) == 2
+    """内置目录挂黄丝带、垃圾桶、GWR Hall 四列 glb 编组。"""
+    assert len(catalog) == 4
     assert "cr400bf_huangsidai_8" in catalog
     assert "cr400bf_huangsidai_16" in catalog
+    assert "cr400bf_lajitong_8" in catalog
+    assert "gwr_hall_19" in catalog
 
 
 def test_huangsidai_points_at_the_glb(catalog):
@@ -50,6 +52,10 @@ def test_huangsidai_points_at_the_glb(catalog):
         assert catalog[train_id].mesh == "CR400BF_HuangSiDai_6car.glb"
     assert catalog["cr400bf_huangsidai_8"].car_count == 8
     assert catalog["cr400bf_huangsidai_16"].car_count == 16
+    assert catalog["cr400bf_lajitong_8"].mesh == "CR400BF_LaJiTong_8car.glb"
+    assert catalog["cr400bf_lajitong_8"].car_count == 8
+    assert catalog["gwr_hall_19"].mesh == "GWR_HallClass_19car.glb"
+    assert catalog["gwr_hall_19"].car_count == 19
 
 
 def test_huangsidai_16_has_cabs_facing_in_the_middle(catalog):

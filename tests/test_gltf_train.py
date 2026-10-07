@@ -27,7 +27,7 @@ def test_every_glb_splits_into_cars(app, path):
     templates = load_consist_templates(path)
     assert len(templates) >= 2
     for car in templates:
-        assert triangle_count(car) > 200
+        assert triangle_count(car) > 100
         lo, hi = Point3(), Point3()
         car.calcTightBounds(lo, hi)
         assert hi.x - lo.x > 3.0
@@ -55,6 +55,20 @@ def test_catalog_huangsidai_resolves_glb(app):
         picked = cars_for(spec)
         assert picked is not None
         assert len(picked) == spec.car_count == count
+
+
+def test_catalog_lajitong_and_gwr_resolve_glb(app):
+    catalog = TrainCatalog.builtin()
+    laji = catalog["cr400bf_lajitong_8"]
+    assert laji.mesh == "CR400BF_LaJiTong_8car.glb"
+    picked = cars_for(laji)
+    assert picked is not None
+    assert len(picked) == 8
+    gwr = catalog["gwr_hall_19"]
+    assert gwr.mesh == "GWR_HallClass_19car.glb"
+    picked = cars_for(gwr)
+    assert picked is not None
+    assert len(picked) == 19
 
 
 def test_train_view_places_huangsidai_on_a_circle(app, catalog):

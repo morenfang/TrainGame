@@ -393,6 +393,46 @@
         ],
         "nose": { "length": 0.12, "end_scale": 0.97, "power": 1.0, "pivot_height": 1.80, "ends": "both" }
       }
+    },
+    "gwr_hall_loco": {
+      "name": "GWR 4900 Hall Class 蒸汽机车",
+      "length": 7.6,
+      "bogie_half_spacing": 2.6,
+      "mass_kg": 126000,
+      "powered": true,
+      "roof_gear": "fans",
+      "livery": { "body": "#6B1C1C", "band": "#C9A227", "roof": "#2A1810" },
+      "shape": {
+        "profile": [
+          [0.00, 1.05],
+          [1.10, 1.05],
+          [1.32, 1.30],
+          [1.32, 3.10],
+          [0.96, 3.40],
+          [0.00, 3.50]
+        ],
+        "nose": { "length": 0.40, "end_scale": 0.85, "power": 1.2, "pivot_height": 1.80, "ends": "both" }
+      }
+    },
+    "gwr_black_wagon": {
+      "name": "黑色棚车",
+      "length": 4.7,
+      "bogie_half_spacing": 1.55,
+      "mass_kg": 22000,
+      "powered": false,
+      "roof_gear": "ac",
+      "livery": { "body": "#1A1A1C", "band": "#0E0E10", "roof": "#121214" },
+      "shape": {
+        "profile": [
+          [0.00, 1.05],
+          [1.10, 1.05],
+          [1.32, 1.25],
+          [1.32, 3.10],
+          [0.96, 3.40],
+          [0.00, 3.50]
+        ],
+        "nose": { "length": 0.12, "end_scale": 0.97, "power": 1.0, "pivot_height": 1.80, "ends": "both" }
+      }
     }
   },
   "trains": [
@@ -433,6 +473,41 @@
         ["cr400bf_hsd_end", 1],
         ["cr400bf_hsd_mid", 6],
         ["cr400bf_hsd_end", 1]
+      ]
+    },
+    {
+      "id": "cr400bf_lajitong_8",
+      "name": "复兴号垃圾桶400BF · 8 辆",
+      "mesh": "CR400BF_LaJiTong_8car.glb",
+      "coupling_gap": 0.25,
+      "power_w": 5500000,
+      "max_tractive_force_n": 220000,
+      "max_brake_force_n": 367000,
+      "max_emergency_brake_force_n": 880800,
+      "adhesion": 0.25,
+      "davis": [0.010, 1.1e-4, 1.4e-5],
+      "max_speed_kmh": 250,
+      "formation": [
+        ["cr400bf_hsd_end", 1],
+        ["cr400bf_hsd_mid", 6],
+        ["cr400bf_hsd_end", 1]
+      ]
+    },
+    {
+      "id": "gwr_hall_19",
+      "name": "GWR 4900 Hall · 机车+18 节货车",
+      "mesh": "GWR_HallClass_19car.glb",
+      "coupling_gap": 0.22,
+      "power_w": 1670000,
+      "max_tractive_force_n": 120000,
+      "max_brake_force_n": 220000,
+      "max_emergency_brake_force_n": 510000,
+      "adhesion": 0.25,
+      "davis": [0.014, 1.4e-4, 2.2e-5],
+      "max_speed_kmh": 120,
+      "formation": [
+        ["gwr_hall_loco", 1],
+        ["gwr_black_wagon", 18]
       ]
     }
   ]

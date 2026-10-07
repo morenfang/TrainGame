@@ -1,7 +1,7 @@
 [project]
 name = "train-sandbox"
-version = "1.1.1"
-description = "3D 火车沙盘游戏：用轨道件拼出闭环线路，跑复兴号黄丝带 400BF"
+version = "1.1.2"
+description = "3D 火车沙盘游戏：用轨道件拼出闭环线路，跑复兴号与蒸汽货车"
 requires-python = ">=3.12"
 
 # core/ 只依赖标准库 + numpy；pygame 等留待 render/ 层。
