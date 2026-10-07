@@ -249,7 +249,9 @@ def main(argv=None) -> int:
 
     if preset is not None and preset.scenery:
         # 布景烘成一个几何节点（一次绘制调用），与游戏里走同一条路径
-        scenery_mod.build_scenery(preset.scenery).reparentTo(base.render)
+        scenery_node = scenery_mod.build_scenery(preset.scenery)
+        scenery_node.reparentTo(base.render)
+        scenery_mod.attach_street_lights(base.render, preset.scenery)
         clearance, tightest = preset.clearance()
         print(f"[布景] {preset.scenery.item_count} 件，"
               f"离轨道最近的净距 {clearance:.2f} m（{tightest}）")

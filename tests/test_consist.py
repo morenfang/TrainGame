@@ -37,23 +37,19 @@ def catalog() -> TrainCatalog:
 # 目录整体
 # --------------------------------------------------------------------------- #
 
-def test_builtin_catalog_has_the_three_requested_trains(catalog):
-    """用户明确要求的三类列车都要在。"""
-    assert "green_skin_10" in catalog  # 老式绿皮车
-    assert "crh380a_8" in catalog      # 和谐号动车组
-    assert "cr400af_8" in catalog      # 复兴号动车组
+def test_builtin_catalog_has_huangsidai_trains(catalog):
+    """内置目录只挂黄丝带 8/16 两列 glb 编组。"""
+    assert len(catalog) == 2
+    assert "cr400bf_huangsidai_8" in catalog
+    assert "cr400bf_huangsidai_16" in catalog
 
 
 def test_huangsidai_points_at_the_glb(catalog):
-    """目前 models/ 里只留黄丝带一份 glb；8/16 节共用，其它编组走程序化车体。"""
+    """8/16 节共用同一份 HuangSiDai glb。"""
     for train_id in ("cr400bf_huangsidai_8", "cr400bf_huangsidai_16"):
         assert catalog[train_id].mesh == "CR400BF_HuangSiDai_6car.glb"
     assert catalog["cr400bf_huangsidai_8"].car_count == 8
     assert catalog["cr400bf_huangsidai_16"].car_count == 16
-    assert not catalog["cr400af_8"].mesh
-    assert not catalog["crh380a_8"].mesh
-    assert not catalog["green_skin_10"].mesh
-    assert not catalog["steam_qj"].mesh
 
 
 def test_huangsidai_16_has_cabs_facing_in_the_middle(catalog):
@@ -100,24 +96,23 @@ def test_every_train_is_self_consistent(train):
 # 派生量
 # --------------------------------------------------------------------------- #
 
-def test_total_length_accounts_for_coupling_gaps(catalog):
-    train = catalog["cr400af_8"]
+def test_total_length_accounts_for_coupling_gaps(fuxing):
+    train = fuxing
     expected = sum(train.lengths) + train.coupling_gap * (train.car_count - 1)
     assert train.total_length == pytest.approx(expected, rel=1e-12)
     assert train.car_count == 8
 
 
-def test_total_mass_is_the_sum_of_the_cars(catalog):
-    train = catalog["green_skin_10"]
+def test_total_mass_is_the_sum_of_the_cars(green):
+    train = green
     assert train.total_mass == pytest.approx(
         sum(car.mass_kg for car in train.cars), rel=1e-12
     )
 
 
-def test_adhesive_mass_only_counts_powered_cars(catalog):
+def test_adhesive_mass_only_counts_powered_cars(green, fuxing):
     """绿皮车只有 1 台机车提供黏着；动车组几乎全列提供黏着。"""
-    green = catalog["green_skin_10"]
-    emu = catalog["cr400af_8"]
+    emu = fuxing
 
     locomotive = green.cars[0]
     assert locomotive.powered
@@ -127,13 +122,12 @@ def test_adhesive_mass_only_counts_powered_cars(catalog):
     assert emu.adhesive_mass / emu.total_mass > 0.95
 
 
-def test_adhesion_limit_uses_the_adhesive_mass(catalog):
+def test_adhesion_limit_uses_the_adhesive_mass(green, fuxing):
     """牵引力上限 = adhesion * 黏着质量 * g —— 动力集中的瓶颈就在这里。"""
-    green = catalog["green_skin_10"]
     expected = green.adhesion * green.adhesive_mass * G
     assert green.max_traction_from_adhesion == pytest.approx(expected, rel=1e-12)
 
-    emu = catalog["cr400af_8"]
+    emu = fuxing
     # 动车组黏着极限远高于绿皮车（约 2.7 倍：全列动力 vs 单机）
     assert emu.max_traction_from_adhesion > 2.5 * green.max_traction_from_adhesion
 
@@ -146,36 +140,36 @@ def test_effective_traction_is_the_lower_of_the_two_limits(catalog):
         )
 
 
-def test_power_limited_crossover_speed(catalog):
+def test_power_limited_crossover_speed(fuxing):
     """P/v 与最大牵引力相等的那个速度 —— 牵引特性由恒牵引力转恒功率。"""
-    emu = catalog["cr400af_8"]
+    emu = fuxing
     f = emu.effective_max_tractive_force
     assert emu.power_limited_speed() == pytest.approx(emu.power_w / f, rel=1e-12)
     # 动车组的拐点速度在 100~200 km/h 之间（真实特征）
     assert 100.0 / 3.6 < emu.power_limited_speed() < 200.0 / 3.6
 
 
-def test_power_to_weight_orders_the_trains_as_designed(catalog):
+def test_power_to_weight_orders_the_trains_as_designed(green, hexie, fuxing):
     """概要设计 §5.7 的定性结论：复兴号 > 和谐号 >> 绿皮车。"""
-    green = catalog["green_skin_10"].power_to_weight()
-    hexie = catalog["crh380a_8"].power_to_weight()
-    fuxing = catalog["cr400af_8"].power_to_weight()
+    green_pw = green.power_to_weight()
+    hexie_pw = hexie.power_to_weight()
+    fuxing_pw = fuxing.power_to_weight()
 
-    assert green < 5.0
-    assert hexie > 20.0
-    assert fuxing > hexie
-    assert fuxing > 8 * green
-
-
-def test_speed_limits(catalog):
-    assert catalog["green_skin_10"].max_speed_ms == pytest.approx(100.0 / 3.6)
-    assert catalog["crh380a_8"].max_speed_ms == pytest.approx(350.0 / 3.6)
-    assert catalog["cr400af_8"].max_speed_ms == pytest.approx(350.0 / 3.6)
+    assert green_pw < 5.0
+    assert hexie_pw > 20.0
+    assert fuxing_pw > hexie_pw
+    assert fuxing_pw > 8 * green_pw
 
 
-def test_more_coaches_makes_the_green_train_heavier_and_longer(catalog):
-    short = catalog["green_skin_10"]
-    long = catalog["green_skin_16"]
+def test_speed_limits(green, hexie, fuxing):
+    assert green.max_speed_ms == pytest.approx(100.0 / 3.6)
+    assert hexie.max_speed_ms == pytest.approx(350.0 / 3.6)
+    assert fuxing.max_speed_ms == pytest.approx(350.0 / 3.6)
+
+
+def test_more_coaches_makes_the_green_train_heavier_and_longer(green, green_16):
+    short = green
+    long = green_16
     assert long.total_mass > short.total_mass
     assert long.total_length > short.total_length
     # 功率一样，所以长编组更肉
@@ -193,14 +187,14 @@ def test_every_car_has_a_livery(catalog):
             assert car.livery.get("body", "").startswith("#")
 
 
-def test_the_three_train_families_are_visually_distinguishable(catalog):
+def test_the_three_train_families_are_visually_distinguishable(green, hexie, fuxing):
     """三种车的主色 / 色带必须不同 —— 这是「外观可辨」验收线的数据依据。"""
-    green = {c.livery["body"] for c in catalog["green_skin_10"].cars}
-    hexie = {c.livery["band"] for c in catalog["crh380a_8"].cars}
-    fuxing = {c.livery["band"] for c in catalog["cr400af_8"].cars}
-    assert not (green & hexie)
-    assert not (hexie & fuxing)
-    assert not (green & fuxing)
+    green_bodies = {c.livery["body"] for c in green.cars}
+    hexie_bands = {c.livery["band"] for c in hexie.cars}
+    fuxing_bands = {c.livery["band"] for c in fuxing.cars}
+    assert not (green_bodies & hexie_bands)
+    assert not (hexie_bands & fuxing_bands)
+    assert not (green_bodies & fuxing_bands)
 
 
 def test_green_skin_train_uses_the_classic_green_with_yellow_band(catalog):
@@ -724,12 +718,12 @@ def test_consist_fits_on_the_standard_loop(catalog):
 def test_eight_car_emu_is_about_a_third_of_the_loop(catalog):
     """概要设计 §5.8 的尺度意图：8 节编组约占环线 1/3。"""
     circumference = 2 * math.pi * 40.0
-    ratio = catalog["cr400af_8"].total_length / circumference
+    ratio = catalog["cr400bf_huangsidai_8"].total_length / circumference
     assert 0.28 < ratio < 0.42
 
 
-def test_long_green_train_is_a_large_fraction_of_the_loop(catalog):
+def test_long_green_train_is_a_large_fraction_of_the_loop(green_16):
     """16 辆绿皮车很长，这正是「长编组在沙盘上很壮观」的来源。"""
     circumference = 2 * math.pi * 40.0
-    ratio = catalog["green_skin_16"].total_length / circumference
+    ratio = green_16.total_length / circumference
     assert ratio > 0.5

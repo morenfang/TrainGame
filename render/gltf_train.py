@@ -144,10 +144,11 @@ def _is_flat_track(dx: float, dy: float, dz: float) -> bool:
     return length > 0.4 and height < 0.012 and mid < 0.08
 
 
-def _lift_dark_materials(root: NodePath, floor: float = 0.35) -> None:
-    """资源站 glb 常把车体做成接近纯黑的 PBR 底色，沙盘灯光下等于隐形。
+def _lift_dark_materials(root: NodePath, floor: float = 0.62,
+                         bleach: float = 0.38) -> None:
+    """资源站 glb 常偏暗：抬底色、再朝白漂一点，沙盘里才像银白车体。
 
-    把过暗的漫反射抬到 ``floor``，保留相对明暗；有贴图的不动。
+    纯色材质会改 Base Color；有贴图的靠后面 ``ColorScale`` 整体提亮。
     """
     for found in root.findAllMatches("**/+GeomNode"):
         geom_node = found.node()
@@ -162,23 +163,23 @@ def _lift_dark_materials(root: NodePath, floor: float = 0.35) -> None:
             if material is None:
                 continue
             base = material.getBaseColor()
-            if max(base[0], base[1], base[2]) >= floor:
-                continue
-            lifted = Material(material)
             peak = max(base[0], base[1], base[2], 1e-6)
-            scale = floor / peak
-            lifted.setBaseColor(Vec4(
-                min(1.0, base[0] * scale),
-                min(1.0, base[1] * scale),
-                min(1.0, base[2] * scale),
-                base[3],
-            ))
-            # 金属漆太暗也看不见，稍微降一点粗糙度让高光回来。
-            if hasattr(lifted, "setRoughness") and lifted.getRoughness() > 0.6:
-                lifted.setRoughness(0.45)
+            scale = floor / peak if peak < floor else 1.0
+            lifted = Material(material)
+            r = min(1.0, base[0] * scale)
+            g = min(1.0, base[1] * scale)
+            b = min(1.0, base[2] * scale)
+            # 往白拉一点，黄丝带才不像脏灰
+            r = min(1.0, r * (1.0 - bleach) + bleach)
+            g = min(1.0, g * (1.0 - bleach) + bleach)
+            b = min(1.0, b * (1.0 - bleach) + bleach * 0.92)
+            lifted.setBaseColor(Vec4(r, g, b, base[3]))
+            if hasattr(lifted, "setRoughness") and lifted.getRoughness() > 0.55:
+                lifted.setRoughness(0.40)
+            if hasattr(lifted, "setMetallic") and lifted.getMetallic() > 0.35:
+                lifted.setMetallic(max(0.15, lifted.getMetallic() * 0.6))
             geom_node.setGeomState(
                 index, state.setAttrib(MaterialAttrib.make(lifted)))
-
 
 def _long_axis(dx: float, dy: float, dz: float) -> str:
     """包围盒最长边是哪一根轴。"""
@@ -459,20 +460,34 @@ def _prepare_car(empty: NodePath, role_yaw_deg: float) -> NodePath:
     return template
 
 
-def load_consist_templates(path) -> tuple[NodePath, ...]:
-    """加载一份编组 glb，返回按走行顺序排好的车体模板。"""
+def load_consist_templates(path, on_progress=None) -> tuple[NodePath, ...]:
+    """加载一份编组 glb，返回按走行顺序排好的车体模板。
+
+    ``on_progress(message, fraction)`` 可选：在慢步骤之间回调，方便 HUD 进度条
+    穿插 ``renderFrame``，避免加载时画面完全假死。
+    """
+    def report(message: str, fraction: float) -> None:
+        if on_progress is not None:
+            on_progress(message, fraction)
+
     key = str(path)
     cached = _cache.get(key)
     if cached is not None:
+        report("使用已缓存的模型", 1.0)
         return cached
+    report("读取模型文件…", 0.15)
     root = _load_root(path)
+    report("识别车厢…", 0.55)
     found = _discover_cars(root)
-    templates = tuple(
-        _prepare_car(car, _role_yaw(found, index))
-        for index, car in enumerate(found)
-    )
-    _cache[key] = templates
-    return templates
+    templates = []
+    total = max(len(found), 1)
+    for index, car in enumerate(found):
+        report(f"整理车厢 {index + 1}/{total}…", 0.55 + 0.40 * (index + 1) / total)
+        templates.append(_prepare_car(car, _role_yaw(found, index)))
+    result = tuple(templates)
+    _cache[key] = result
+    report("模型就绪", 1.0)
+    return result
 
 
 def _unit_cars(
@@ -512,16 +527,18 @@ def _pick_cars(templates: tuple[NodePath, ...], count: int) -> tuple[NodePath, .
     return _unit_cars(head, mids, tail, count)
 
 
-def cars_for(spec: TrainSpec) -> tuple[NodePath, ...] | None:
+def cars_for(spec: TrainSpec, on_progress=None) -> tuple[NodePath, ...] | None:
     """按编组节数抽出对应的车体模板。没有模型时返回 ``None``。"""
     path = mesh_path_for(spec)
     if path is None:
         return None
     try:
-        templates = load_consist_templates(path)
+        templates = load_consist_templates(path, on_progress=on_progress)
     except GltfTrainError as exc:
         print(f"[列车模型] {path.name} 加载失败，改用程序化车体：{exc}")
         return None
+    if on_progress is not None:
+        on_progress("编组车厢…", 0.96)
     picked = _pick_cars(templates, spec.car_count)
     return picked or None
 
@@ -533,18 +550,30 @@ def light_train(root: NodePath) -> NodePath:
         return existing
     holder = root.getParent().attachNewNode(f"gltf_lights_{root.getName()}")
     ambient = AmbientLight("train_ambient")
-    ambient.setColor((0.28, 0.30, 0.33, 1.0))
+    ambient.setColor((0.62, 0.63, 0.65, 1.0))
     ambient_np = holder.attachNewNode(ambient)
     root.setLight(ambient_np)
 
     sun = DirectionalLight("train_sun")
-    sun.setColor((0.55, 0.52, 0.48, 1.0))
+    sun.setColor((1.00, 0.97, 0.92, 1.0))
     sun_np = holder.attachNewNode(sun)
     sun_np.setPos(style.SUN_DIR[0] * 200.0,
                   style.SUN_DIR[1] * 200.0,
                   style.SUN_DIR[2] * 200.0)
     sun_np.lookAt(0.0, 0.0, 0.0)
     root.setLight(sun_np)
+
+    fill = DirectionalLight("train_fill")
+    fill.setColor((0.42, 0.45, 0.48, 1.0))
+    fill_np = holder.attachNewNode(fill)
+    fill_np.setPos(-style.SUN_DIR[0] * 120.0,
+                   style.SUN_DIR[1] * 80.0,
+                   -style.SUN_DIR[2] * 120.0)
+    fill_np.lookAt(0.0, 0.0, 0.0)
+    root.setLight(fill_np)
+
+    # 贴图车体也整体提亮、偏白一点
+    root.setColorScale(1.38, 1.35, 1.30, 1.0)
     smooth = getattr(ShadeModelAttrib, "MSmooth", None) or getattr(
         ShadeModelAttrib, "M_smooth", 1)
     root.setAttrib(ShadeModelAttrib.make(smooth))

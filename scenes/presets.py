@@ -69,8 +69,8 @@ PLOT_SIZES = {
 TRAIN_IDS = {
     "valley": "cr400bf_huangsidai_8",
     "gorge": "cr400bf_huangsidai_8",
-    "town": "green_skin_10",
-    "lake": "green_skin_10",
+    "town": "cr400bf_huangsidai_8",
+    "lake": "cr400bf_huangsidai_8",
     "overpass": "cr400bf_huangsidai_16",
 }
 
@@ -219,6 +219,21 @@ def _only_clear(items, points, margin: float, key=None):
         footprint = key(item)
         if all(footprint.distance_to(*_plan(p)) >= limit for p in points):
             kept.append(item)
+    return tuple(kept)
+
+
+def _cull_overlapping_houses(houses, gap: float = 1.5):
+    """大房子先占坑，后面的若踩到已有轮廓就丢掉（高矮长宽随机后网格间距不够用）。"""
+    ordered = sorted(houses, key=lambda h: -(h.width * h.depth * h.height))
+    kept: list = []
+    for house in ordered:
+        if any(
+            house.footprint().distance_to(other.x, other.z) < gap
+            or other.footprint().distance_to(house.x, house.z) < gap
+            for other in kept
+        ):
+            continue
+        kept.append(house)
     return tuple(kept)
 
 
@@ -473,12 +488,10 @@ def build_valley(catalog: Catalog) -> Scene:
     )
 
     # ---- 村子：环线**里**的一簇房子（环内那块 240 × 80 的空地正好当宅基地）
-    houses = _only_clear([scenery_mod.House(
-        x=x, z=z, width=rng.uniform(7.0, 11.0), depth=rng.uniform(6.0, 8.5),
-        height=rng.uniform(4.0, 6.4), heading=rng.uniform(0.0, math.tau),
-        seed=rng.randrange(1 << 30),
-    ) for x, z in _grid(rng, -58.0, 58.0, -24.0, 24.0, 26.0)],
-        plane, style.TRACK_CLEARANCE + 1.0)
+    houses = _cull_overlapping_houses(_only_clear([
+        scenery_mod.random_village_house(x, z, rng)
+        for x, z in _grid(rng, -58.0, 58.0, -24.0, 24.0, 28.0)
+    ], plane, style.TRACK_CLEARANCE + 1.0))
 
     # ---- 树：山坡脚一条林带 + 谷底散树
     trees = [scenery_mod.Tree(x=x, z=z, height=rng.uniform(7.0, 13.0),
@@ -650,13 +663,11 @@ def build_gorge(catalog: Catalog) -> Scene:
         if _far_enough(x, z, plane, 7.0) and not _near_water(x, z, water, 3.0)
     )
 
-    houses = _only_clear([scenery_mod.House(
-        x=x, z=z, width=rng.uniform(7.5, 11.0), depth=rng.uniform(6.0, 8.0),
-        height=rng.uniform(4.0, 6.0), heading=rng.uniform(0.0, math.tau),
-        seed=rng.randrange(1 << 30),
-    ) for x, z in _grid(rng, -120.0, 120.0, -120.0, 120.0, 30.0)
-        if rng.random() < 0.55 and not _near_water(x, z, water, 6.0)],
-        plane, style.TRACK_CLEARANCE + 1.0)
+    houses = _cull_overlapping_houses(_only_clear([
+        scenery_mod.random_village_house(x, z, rng)
+        for x, z in _grid(rng, -120.0, 120.0, -120.0, 120.0, 34.0)
+        if rng.random() < 0.55 and not _near_water(x, z, water, 6.0)
+    ], plane, style.TRACK_CLEARANCE + 1.0))
 
     trees = [scenery_mod.Tree(x=x, z=z, height=rng.uniform(6.0, 12.0),
                               seed=rng.randrange(1 << 30),
@@ -748,12 +759,10 @@ def build_town(catalog: Catalog) -> Scene:
     )
 
     # ---- 村子：环线**里**那片空地
-    houses = _only_clear([scenery_mod.House(
-        x=x, z=z, width=rng.uniform(7.0, 11.0), depth=rng.uniform(6.0, 8.5),
-        height=rng.uniform(4.0, 6.2), heading=rng.uniform(0.0, math.tau),
-        seed=rng.randrange(1 << 30),
-    ) for x, z in _grid(rng, -68.0, 68.0, -25.0, 25.0, 26.0)],
-        plane, style.TRACK_CLEARANCE + 1.0)
+    houses = _cull_overlapping_houses(_only_clear([
+        scenery_mod.random_village_house(x, z, rng)
+        for x, z in _grid(rng, -68.0, 68.0, -25.0, 25.0, 28.0)
+    ], plane, style.TRACK_CLEARANCE + 1.0))
 
     meadows = tuple(
         scenery_mod.Meadow(x=x, z=z, radius=rng.uniform(16.0, 30.0),
@@ -783,7 +792,7 @@ def build_town(catalog: Catalog) -> Scene:
                                     trees=trees, houses=tuple(houses),
                                     stations=(station,),
                                     platforms=(platform,)),
-        plot_size=PLOT_SIZES["town"], train_id="green_skin_10",
+        plot_size=PLOT_SIZES["town"], train_id="cr400bf_huangsidai_8",
         clearance_points=tuple(walk) + tuple(_port_polyline(layout, stub)),
     )
 
@@ -808,13 +817,13 @@ def build_lake(catalog: Catalog) -> Scene:
     shore = lake.radius + lake.beach
 
     # ---- 湖畔小屋：湖岸与轨道之间那条环形带里，窗子朝着湖
-    houses = _only_clear([scenery_mod.House(
-        x=x, z=z, width=rng.uniform(6.5, 9.5), depth=rng.uniform(5.5, 7.5),
-        height=rng.uniform(3.6, 5.4),
-        heading=math.atan2(cz - z, cx - x),
-        seed=rng.randrange(1 << 30),
-    ) for x, z in _ring(rng, cx, cz, shore + 10.0, 11, spread=2.5)],
-        plane, style.TRACK_CLEARANCE + 1.0)
+    houses = _cull_overlapping_houses(_only_clear([
+        scenery_mod.random_village_house(
+            x, z, rng,
+            heading=math.atan2(cz - z, cx - x),
+        )
+        for x, z in _ring(rng, cx, cz, shore + 12.0, 11, spread=3.5)
+    ], plane, style.TRACK_CLEARANCE + 1.0))
 
     meadows = tuple(
         scenery_mod.Meadow(x=x, z=z, radius=rng.uniform(18.0, 36.0),
@@ -848,7 +857,7 @@ def build_lake(catalog: Catalog) -> Scene:
         layout=layout,
         scenery=scenery_mod.Scenery(peaks=tuple(hills), lakes=(lake,),
                                     meadows=meadows, trees=trees, houses=houses),
-        plot_size=PLOT_SIZES["lake"], train_id="green_skin_10",
+        plot_size=PLOT_SIZES["lake"], train_id="cr400bf_huangsidai_8",
         clearance_points=tuple(walk),
     )
 
@@ -975,12 +984,10 @@ def build_overpass(catalog: Catalog) -> Scene:
     )
 
     # ---- 村子：环线**里**东边那片空地（西边留给疏解线）
-    houses = _only_clear([scenery_mod.House(
-        x=x, z=z, width=rng.uniform(7.0, 11.0), depth=rng.uniform(6.0, 8.5),
-        height=rng.uniform(4.0, 6.2), heading=rng.uniform(0.0, math.tau),
-        seed=rng.randrange(1 << 30),
-    ) for x, z in _grid(rng, 20.0, 240.0, -28.0, 28.0, 28.0)],
-        plane, style.TRACK_CLEARANCE + 1.0)
+    houses = _cull_overlapping_houses(_only_clear([
+        scenery_mod.random_village_house(x, z, rng)
+        for x, z in _grid(rng, 20.0, 240.0, -28.0, 28.0, 32.0)
+    ], plane, style.TRACK_CLEARANCE + 1.0))
 
     # ---- 树：山坡脚的林带 + 谷地散树
     trees = [scenery_mod.Tree(x=x, z=z, height=rng.uniform(7.0, 13.0),

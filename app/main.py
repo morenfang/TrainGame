@@ -86,7 +86,7 @@ def _print_scenes(catalog: Catalog) -> None:
         print(f"           布景 {scene.scenery.item_count} 件，场地 "
               f"{scene.plot_size:.0f} m × {scene.plot_size:.0f} m")
     print("\n进去之后：N 换车（自动上线），↑↓ 推手柄，空格 惰行，"
-          "Shift+空格 急停，H 收起 HUD，Ctrl+S 保存。")
+          "Shift+空格 急停，H 打开信息栏，Ctrl+S 保存。")
 
 
 def _load_startup_layout(path: str, catalog: Catalog):
@@ -206,7 +206,7 @@ def main(argv=None) -> int:
         base.taskMgr.add(_frame_limiter(base, args.frames), "frame_limiter")
 
     print(f"[启动] {len(catalog)} 个轨道件，{len(catalog.categories)} 个类别。"
-          f" 按 H 收起 HUD，Ctrl+S 保存。")
+          f" 点左侧「信息」或按 H 打开信息栏，Ctrl+S 保存。")
     base.run()
     return 0
 

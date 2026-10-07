@@ -541,24 +541,21 @@ def test_body_half_width_is_the_widest_section_point(catalog, bodies):
 # 编组朝向
 # --------------------------------------------------------------------------- #
 
-def test_consist_facings_point_the_noses_outward(catalog):
+def test_consist_facings_point_the_noses_outward(hexie, fuxing, fuxing_16, green):
     """一列动车组的两端各有一个头型；中间车两端都平。"""
-    for train_id in ("crh380a_8", "cr400af_8", "cr400af_16"):
-        spec = catalog[train_id]
+    for spec in (hexie, fuxing, fuxing_16):
         facings = spec.car_facings()
-        assert facings[0] is False, f"{train_id} 的头车不该掉头"
-        assert facings[-1] is True, f"{train_id} 的尾车必须掉头"
-        assert sum(facings) == 1, f"{train_id} 掉头的车不止一节"
+        assert facings[0] is False, f"{spec.id} 的头车不该掉头"
+        assert facings[-1] is True, f"{spec.id} 的尾车必须掉头"
+        assert sum(facings) == 1, f"{spec.id} 掉头的车不止一节"
 
     # 两头都是头型的车（东风4B / 客车）不需要掉头
-    green = catalog["green_skin_10"].car_facings()
-    assert not any(green)
+    assert not any(green.car_facings())
 
 
-def test_flipped_cars_actually_point_backwards(catalog):
+def test_flipped_cars_actually_point_backwards(hexie, fuxing, fuxing_16):
     """镜像过的那节头车，鼻尖必须真的跑到了 -x 一侧（尾车朝后）。"""
-    for train_id in ("crh380a_8", "cr400af_8", "cr400af_16"):
-        spec = catalog[train_id]
+    for spec in (hexie, fuxing, fuxing_16):
         items = train_mesh.build_train_mesh(spec, details=False)
         assert len(items) == spec.car_count
         for index in (0, spec.car_count - 1):
@@ -568,10 +565,10 @@ def test_flipped_cars_actually_point_backwards(catalog):
             samples = _width_profile(item.builder)
             tail, head = samples[0][1], samples[-1][1]
             assert head != pytest.approx(tail), \
-                f"{train_id} 第 {index} 节两端一样宽，测不出朝向"
+                f"{spec.id} 第 {index} 节两端一样宽，测不出朝向"
             tip_at_front = head < tail
             assert tip_at_front == (index == 0), (
-                f"{train_id} 第 {index} 节（flipped={item.flipped}）的鼻尖在 "
+                f"{spec.id} 第 {index} 节（flipped={item.flipped}）的鼻尖在 "
                 f"{'+x' if tip_at_front else '-x'} 一侧，应当朝车外"
             )
 

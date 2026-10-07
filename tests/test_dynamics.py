@@ -38,18 +38,68 @@ def catalog() -> TrainCatalog:
 
 @pytest.fixture(scope="module")
 def green(catalog) -> TrainSpec:
-    return catalog["green_skin_10"]
+    """目录里已不挂绿皮编组；测试用车型库现拼一份，参数与旧 green_skin_10 一致。"""
+    return build_train(
+        {
+            "id": "green_skin_10",
+            "coupling_gap": 0.3,
+            "power_w": 1985000,
+            "max_tractive_force_n": 300000,
+            "max_brake_force_n": 584800,
+            "max_emergency_brake_force_n": 1651200,
+            "adhesion": 0.25,
+            "davis": [0.015, 1.5e-4, 2.0e-5],
+            "max_speed_kmh": 100,
+            "formation": [["df4b_loco", 1], ["coach_25b", 10]],
+        },
+        catalog.car_types,
+    )
 
 
 @pytest.fixture(scope="module")
 def hexie(catalog) -> TrainSpec:
-    return catalog["crh380a_8"]
+    return build_train(
+        {
+            "id": "crh380a_8",
+            "coupling_gap": 0.25,
+            "power_w": 9600000,
+            "max_tractive_force_n": 250000,
+            "max_brake_force_n": 383000,
+            "max_emergency_brake_force_n": 919200,
+            "adhesion": 0.25,
+            "davis": [0.010, 1.1e-4, 1.4e-5],
+            "max_speed_kmh": 350,
+            "formation": [
+                ["crh380a_end", 1],
+                ["crh380a_mid", 6],
+                ["crh380a_end", 1],
+            ],
+        },
+        catalog.car_types,
+    )
 
 
 @pytest.fixture(scope="module")
 def fuxing(catalog) -> TrainSpec:
-    return catalog["cr400af_8"]
-
+    return build_train(
+        {
+            "id": "cr400af_8",
+            "coupling_gap": 0.25,
+            "power_w": 11000000,
+            "max_tractive_force_n": 260000,
+            "max_brake_force_n": 367000,
+            "max_emergency_brake_force_n": 880800,
+            "adhesion": 0.25,
+            "davis": [0.009, 1.0e-4, 1.25e-5],
+            "max_speed_kmh": 350,
+            "formation": [
+                ["cr400af_end", 1],
+                ["cr400af_mid", 6],
+                ["cr400af_end", 1],
+            ],
+        },
+        catalog.car_types,
+    )
 
 def make_spec(*, mass: float = 400_000.0, power: float = 5_000_000.0,
               max_te: float = 200_000.0, brake: float = 200_000.0,

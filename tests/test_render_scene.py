@@ -88,20 +88,19 @@ def test_open_layout_still_offers_a_drivable_path(app, catalog):
     assert view.path.total_length == pytest.approx(100.0, rel=1e-12)
 
 
-def test_open_layout_path_is_long_enough_to_hold_a_train(app, catalog):
+def test_open_layout_path_is_long_enough_to_hold_a_train(app, catalog, hexie):
     """开链路径的长度必须是真的弧长 —— TrainView 拿它和编组全长比大小。
 
     这条是上一条的**下游后果**：路径长度错一点，列车上线时就会莫名其妙地
     报"编组比线路还长"。
     """
     from render.train_view import TrainView
-    from core.train.consist import TrainCatalog
 
     layout, _ = build_straight_chain(catalog, 20)         # 400 m
     view = LayoutView(layout, app.render)
     view.sync()
 
-    train = TrainView(TrainCatalog.builtin()["crh380a_8"], app.render)
+    train = TrainView(hexie, app.render)
     assert view.path.total_length > train.consist_length
     train.state.s = 200.0
     assert train.sync(view.path), train.placement_error

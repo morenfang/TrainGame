@@ -177,10 +177,10 @@ def distance_to_centreline(path, point) -> float:
 # 节点结构
 # --------------------------------------------------------------------------- #
 
-def test_one_node_per_car(app, catalog, trains):
+def test_one_node_per_car(app, catalog, hexie):
     layout, first = build_circle(catalog)
     path = loop_of(catalog, (first, "a"), layout)
-    spec = trains["crh380a_8"]
+    spec = hexie
 
     view = TrainView(spec, app.render)
     assert view.car_count == spec.car_count
@@ -193,9 +193,9 @@ def test_one_node_per_car(app, catalog, trains):
     assert app.render.find(f"**/train_{spec.id}").isEmpty()
 
 
-def test_same_car_type_shares_one_geometry(app, catalog, trains):
+def test_same_car_type_shares_one_geometry(app, catalog, hexie):
     """同型车厢必须共享 Geom（``copyTo`` 实例化），否则 8 节车会各存一份顶点。"""
-    spec = trains["crh380a_8"]
+    spec = hexie
     if spec.mesh:
         pytest.skip("外部 glb 每节是独立网格，不走程序化实例化")
     layout, first = build_circle(catalog)
@@ -219,8 +219,7 @@ def test_same_car_type_shares_one_geometry(app, catalog, trains):
 # 摆位：必须与 core 算出的转向架位置重合
 # --------------------------------------------------------------------------- #
 
-@pytest.mark.parametrize("train_id", ["crh380a_8", "cr400af_8", "green_skin_10"])
-def test_car_origin_and_axis_match_core_exactly(app, catalog, trains, train_id):
+def test_car_origin_and_axis_match_core_exactly(app, catalog, synthetic_train):
     """车体节点的原点必须正好落在 ``state.center``，局部 +X 必须指向 ``front``。
 
     这两条合起来就是"刚性车体正确地骑在两个转向架之间"的完整定义，而且**精确**
@@ -229,7 +228,8 @@ def test_car_origin_and_axis_match_core_exactly(app, catalog, trains, train_id):
     """
     layout, first = build_circle(catalog)
     path = loop_of(catalog, (first, "a"), layout)
-    spec = trains[train_id]
+    spec = synthetic_train
+    train_id = spec.id
 
     view = TrainView(spec, app.render)
     view.state.s = 40.0
@@ -253,9 +253,8 @@ def test_car_origin_and_axis_match_core_exactly(app, catalog, trains, train_id):
     view.destroy()
 
 
-@pytest.mark.parametrize("train_id", ["crh380a_8", "cr400af_8", "green_skin_10"])
-def test_wheels_stay_on_the_rail_centreline_around_curves(app, catalog, trains,
-                                                          train_id):
+def test_wheels_stay_on_the_rail_centreline_around_curves(app, catalog,
+                                                          synthetic_train):
     """画出来的转向架必须压在**轨道中心线**上（弯道上也要）。
 
     弯道上刚性车体走的是**弦**，而轨道是弧，两者长度不同 —— 弦比弧短
@@ -266,7 +265,8 @@ def test_wheels_stay_on_the_rail_centreline_around_curves(app, catalog, trains,
     """
     layout, first = build_circle(catalog)
     path = loop_of(catalog, (first, "a"), layout)
-    spec = trains[train_id]
+    spec = synthetic_train
+    train_id = spec.id
 
     view = TrainView(spec, app.render)
     view.state.s = 63.0
@@ -283,11 +283,11 @@ def test_wheels_stay_on_the_rail_centreline_around_curves(app, catalog, trains,
     view.destroy()
 
 
-def test_straight_track_has_no_chord_shortfall_at_all(app, catalog):
+def test_straight_track_has_no_chord_shortfall_at_all(app, catalog, hexie):
     """直线段上没有弦长亏损，画出来的转向架必须与 core 的**逐点重合**。"""
     layout, first = build_straight_chain(catalog, 8)
     path = trace(layout, (first, "a"))
-    spec = TrainCatalog.builtin()["crh380a_8"]
+    spec = hexie
     view = TrainView(spec, app.render)
     view.state.s = 60.0
     assert view.sync(path)
@@ -304,11 +304,11 @@ def test_straight_track_has_no_chord_shortfall_at_all(app, catalog):
     view.destroy()
 
 
-def test_wheels_sit_on_the_railhead(app, catalog, trains):
+def test_wheels_sit_on_the_railhead(app, catalog, green):
     """转向架中心的 ``y`` 必须正好是**轨面**高度 —— 车不能浮起来也不能陷下去。"""
     layout, first = build_circle(catalog)
     path = loop_of(catalog, (first, "a"), layout)
-    view = TrainView(trains["green_skin_10"], app.render)
+    view = TrainView(green, app.render)
     view.state.s = 25.0
     view.sync(path)
 
@@ -318,11 +318,11 @@ def test_wheels_sit_on_the_railhead(app, catalog, trains):
     view.destroy()
 
 
-def test_car_heading_matches_core(app, catalog, trains):
+def test_car_heading_matches_core(app, catalog, hexie):
     """车体局部 +X 必须就是 core 说的车头方向。"""
     layout, first = build_circle(catalog)
     path = loop_of(catalog, (first, "a"), layout)
-    view = TrainView(trains["crh380a_8"], app.render)
+    view = TrainView(hexie, app.render)
     view.state.s = 17.5
     view.sync(path)
 
@@ -338,7 +338,7 @@ def test_car_heading_matches_core(app, catalog, trains):
     view.destroy()
 
 
-def test_consist_is_laid_out_head_first_and_does_not_overlap(app, catalog, trains):
+def test_consist_is_laid_out_head_first_and_does_not_overlap(app, catalog, green):
     """编组必须首尾相接、不叠在一起：相邻两车的车钩面间距 == coupling_gap。
 
     在**直线**上量，因为那里没有弦长亏损，间距是精确的；弯道上量到的会带上
@@ -347,7 +347,7 @@ def test_consist_is_laid_out_head_first_and_does_not_overlap(app, catalog, train
     """
     layout, first = build_straight_chain(catalog, 8)      # 160 m
     path = trace(layout, (first, "a"))
-    spec = trains["green_skin_10"]                        # 113.2 m
+    spec = green                        # 113.2 m
     view = TrainView(spec, app.render)
     view.state.s = 140.0
     assert view.sync(path)
@@ -383,7 +383,7 @@ def single_car(spec, index: int = 0):
                    coupling_gap=0.0)
 
 
-def test_car_pitches_nose_up_climbing_a_ramp(app, catalog, trains):
+def test_car_pitches_nose_up_climbing_a_ramp(app, catalog, hexie):
     """上坡时车体局部 +X 必须**抬起来**（y 分量为正），坡度与轨道一致。
 
     这里不能用"车头节点比车尾高"去判 —— 那是位置差，不涉及姿态。要判的是
@@ -395,7 +395,7 @@ def test_car_pitches_nose_up_climbing_a_ramp(app, catalog, trains):
     assert path.segments[0].grade == pytest.approx(0.03)
     assert path.segments[0].length == pytest.approx(40.0)
 
-    spec = single_car(trains["crh380a_8"])
+    spec = single_car(hexie)
     view = TrainView(spec, app.render)
     view.state.s = 20.0                       # 车体落在 11.5 ~ 21.5 m，全在坡上
     assert view.sync(path)
@@ -413,7 +413,7 @@ def test_car_pitches_nose_up_climbing_a_ramp(app, catalog, trains):
     view.destroy()
 
 
-def test_car_pitches_nose_down_going_the_other_way(app, catalog, trains):
+def test_car_pitches_nose_down_going_the_other_way(app, catalog, hexie):
     """同一条坡道反着走，车头必须低下去 —— 俯仰的**符号**也要对。
 
     这条才是真正在测符号：只测"上坡抬头"的话，把俯仰写成 ``|pitch|`` 也照样能过。
@@ -425,7 +425,7 @@ def test_car_pitches_nose_down_going_the_other_way(app, catalog, trains):
     assert path.segments[0].grade == pytest.approx(-0.03)
     assert path.segments[0].reversed
 
-    spec = single_car(trains["crh380a_8"])
+    spec = single_car(hexie)
     view = TrainView(spec, app.render)
     view.state.s = 20.0
     assert view.sync(path)
@@ -439,7 +439,7 @@ def test_car_pitches_nose_down_going_the_other_way(app, catalog, trains):
     view.destroy()
 
 
-def test_pitch_is_the_angle_between_the_two_bogies(app, catalog, trains):
+def test_pitch_is_the_angle_between_the_two_bogies(app, catalog, hexie):
     """坡顶（一段坡 + 一段平）上，俯仰必须正好是两转向架连线的倾角。
 
     这一条把"俯仰从哪来"钉死：它**不是**单独查一次坡度，而是两个转向架各自
@@ -451,7 +451,7 @@ def test_pitch_is_the_angle_between_the_two_bogies(app, catalog, trains):
     layout.attach("straight_40", "a", (foot, "b"))
     path = trace(layout, (foot, "a"))
 
-    spec = single_car(trains["crh380a_8"])
+    spec = single_car(hexie)
     view = TrainView(spec, app.render)
     view.state.s = 40.0            # 前转向架在 s=40（坡顶），后转向架在 s=33（坡上）
     assert view.sync(path)
@@ -464,10 +464,10 @@ def test_pitch_is_the_angle_between_the_two_bogies(app, catalog, trains):
     view.destroy()
 
 
-def test_flat_track_keeps_cars_level(app, catalog, trains):
+def test_flat_track_keeps_cars_level(app, catalog, fuxing):
     layout, first = build_circle(catalog)
     path = loop_of(catalog, (first, "a"), layout)
-    view = TrainView(trains["cr400af_8"], app.render)
+    view = TrainView(fuxing, app.render)
     view.state.s = 33.0
     view.sync(path)
     for index in range(view.car_count):
@@ -481,7 +481,7 @@ def test_flat_track_keeps_cars_level(app, catalog, trains):
 # 摆不下的时候
 # --------------------------------------------------------------------------- #
 
-def test_consist_longer_than_the_loop_is_refused_with_a_reason(app, catalog, trains):
+def test_consist_longer_than_the_loop_is_refused_with_a_reason(app, catalog, green_16):
     """编组比线路还长：藏起来 + 说清楚，而且**不能抛异常**。
 
     "绿皮车 16 辆"有 176 m，而 6 节 R40/45° 只有 188 m —— 够呛；这里用更短的
@@ -495,7 +495,7 @@ def test_consist_longer_than_the_loop_is_refused_with_a_reason(app, catalog, tra
     path = trace(layout, (first, "a"))
     assert path.total_length == pytest.approx(80.0)
 
-    spec = trains["green_skin_16"]
+    spec = green_16
     view = TrainView(spec, app.render)
     assert view.consist_length > path.total_length
 
@@ -507,17 +507,17 @@ def test_consist_longer_than_the_loop_is_refused_with_a_reason(app, catalog, tra
     view.destroy()
 
 
-def test_empty_layout_hides_the_train_without_crashing(app, catalog, trains):
+def test_empty_layout_hides_the_train_without_crashing(app, catalog, hexie):
     layout = Layout(catalog=catalog)
     path = trace(layout, (0, "a")) if False else None
-    view = TrainView(trains["crh380a_8"], app.render)
+    view = TrainView(hexie, app.render)
     assert view.sync(path) is False
     assert not view.visible
     assert view.placement_error == "还没有可行驶的轨道"
     view.destroy()
 
 
-def test_open_path_keeps_the_whole_train_on_the_track(app, catalog, trains):
+def test_open_path_keeps_the_whole_train_on_the_track(app, catalog, hexie):
     """开链上首车不能太靠前，否则车尾会伸到起点之前 —— 那时 ``pose_at`` 会抛错。
 
     这条同时是"限位真的生效"的证明：故意把 ``s`` 设成一个会越界的值。
@@ -525,7 +525,7 @@ def test_open_path_keeps_the_whole_train_on_the_track(app, catalog, trains):
     layout, first = build_straight_chain(catalog, 8)     # 160 m
     path = trace(layout, (first, "a"))
     assert not path.closed
-    spec = trains["crh380a_8"]                           # 81.75 m
+    spec = hexie                           # 81.75 m
     view = TrainView(spec, app.render)
 
     view.state.s = 0.0                       # 车尾会伸到 s < 0
@@ -551,12 +551,12 @@ def test_open_path_keeps_the_whole_train_on_the_track(app, catalog, trains):
     view.destroy()
 
 
-def test_closed_loop_wraps_the_head_arc_length(app, catalog, trains):
+def test_closed_loop_wraps_the_head_arc_length(app, catalog, hexie):
     """闭环上 ``s`` 越界必须绕回，而不是被夹住。"""
     layout, first = build_circle(catalog)
     path = loop_of(catalog, (first, "a"), layout)
     total = path.total_length
-    view = TrainView(trains["crh380a_8"], app.render)
+    view = TrainView(hexie, app.render)
 
     view.state.s = total + 12.5
     assert view.sync(path)
@@ -596,11 +596,11 @@ def test_re_anchoring_never_turns_the_train_around(catalog, flip):
         "列车被折回去了（这正是用户看到的『突然变向』）"
 
 
-def test_sync_onto_a_reversed_path_keeps_the_train_facing_forward(app, catalog, trains):
+def test_sync_onto_a_reversed_path_keeps_the_train_facing_forward(app, catalog, green):
     """从列车角度看：同一条环线、交上来的路却是反的，它也必须接着原方向开。"""
     layout, first = build_circle(catalog)
     path = loop_of(catalog, (first, "a"), layout)
-    view = TrainView(trains["green_skin_10"], app.render)
+    view = TrainView(green, app.render)
 
     view.state.s = path.total_length * 0.6
     assert view.sync(path)
@@ -649,7 +649,7 @@ def test_reversal_rejected_when_it_would_face_into_a_wrong_switch_leg(catalog):
     assert (20, 1) not in facing, "列车不该顺向走进 #20 的岔股（#20 扳在直股）"
 
 
-def test_retrace_keeps_the_train_heading_when_the_loop_breaks(catalog):
+def test_retrace_keeps_the_train_heading_when_the_loop_breaks(catalog, hexie):
     """扳 #22 到岔股把主环截成「环 + 支线」时，重走线不能把列车折回头，也不能
     顺向走错腿。
 
@@ -663,7 +663,7 @@ def test_retrace_keeps_the_train_heading_when_the_loop_breaks(catalog):
     _, forward = detect_closure(layout, allow_open=True)
     layout.set_switch(22, 1)
 
-    tail_length = 81.75  # cr400af_8 / crh380a_8 的编组长
+    tail_length = hexie.total_length
     for frac in (0.1, 0.5, 0.8, 0.85, 0.9, 0.95):
         s = forward.total_length * frac
         pose = forward.pose_at(s)
@@ -686,7 +686,7 @@ def test_retrace_keeps_the_train_heading_when_the_loop_breaks(catalog):
             f"frac={frac}：列车居然从 #20 顺向走进了岔股"
 
 
-def test_train_does_not_flip_when_a_switch_breaks_the_loop(app, catalog, trains):
+def test_train_does_not_flip_when_a_switch_breaks_the_loop(app, catalog, hexie):
     """整条链走一遍：扳 #22 之后，列车既不闪现也不折回，更不能从 #20 挤进岔股。
 
     这一条是用户现场那句「#22 扳到岔路，车还会闪现、还从 #20 走进岔道」的端到端
@@ -695,7 +695,7 @@ def test_train_does_not_flip_when_a_switch_breaks_the_loop(app, catalog, trains)
     """
     layout = _overpass_layout(catalog)
     _, loop = detect_closure(layout, allow_open=True)
-    view = TrainView(trains["crh380a_8"], app.render)
+    view = TrainView(hexie, app.render)
 
     view.state.s = loop.total_length * 0.85
     assert view.sync(loop, layout)
@@ -712,7 +712,7 @@ def test_train_does_not_flip_when_a_switch_breaks_the_loop(app, catalog, trains)
     view.destroy()
 
 
-def test_train_takes_the_bypass_when_22_is_set_to_diverging(app, catalog, trains):
+def test_train_takes_the_bypass_when_22_is_set_to_diverging(app, catalog, hexie):
     """扳 #22 到岔股后，列车必须顺向从 #22 走进岔股（route 1），而不是直着冲过去。
 
     这是用户「#22 扳到 route 1，列车没进 route 1」的直接回归：把车摆在主环靠后
@@ -721,7 +721,7 @@ def test_train_takes_the_bypass_when_22_is_set_to_diverging(app, catalog, trains
     """
     layout = _overpass_layout(catalog)
     _, loop = detect_closure(layout, allow_open=True)
-    view = TrainView(trains["crh380a_8"], app.render)
+    view = TrainView(hexie, app.render)
     view.set_handle(1.0)
 
     view.state.s = loop.total_length * 0.8
@@ -751,8 +751,8 @@ def test_train_takes_the_bypass_when_22_is_set_to_diverging(app, catalog, trains
 # 手柄与运行
 # --------------------------------------------------------------------------- #
 
-def test_handle_splits_into_throttle_and_brake(app, trains):
-    view = TrainView(trains["crh380a_8"], app.render)
+def test_handle_splits_into_throttle_and_brake(app, hexie):
+    view = TrainView(hexie, app.render)
     view.set_handle(0.6)
     assert view.state.throttle == pytest.approx(0.6)
     assert view.state.brake == 0.0
@@ -768,8 +768,8 @@ def test_handle_splits_into_throttle_and_brake(app, trains):
     view.destroy()
 
 
-def test_nudge_handle_clamps_to_the_ends(app, trains):
-    view = TrainView(trains["crh380a_8"], app.render)
+def test_nudge_handle_clamps_to_the_ends(app, hexie):
+    view = TrainView(hexie, app.render)
     for _ in range(50):
         view.nudge_handle(0.1)
     assert view.handle == pytest.approx(1.0)
@@ -779,10 +779,10 @@ def test_nudge_handle_clamps_to_the_ends(app, trains):
     view.destroy()
 
 
-def test_advance_moves_the_train_along_the_loop(app, catalog, trains):
+def test_advance_moves_the_train_along_the_loop(app, catalog, green):
     layout, first = build_circle(catalog)
     path = loop_of(catalog, (first, "a"), layout)
-    view = TrainView(trains["green_skin_10"], app.render)
+    view = TrainView(green, app.render)
     view.state.s = 10.0
     view.sync(path)
 
@@ -796,7 +796,7 @@ def test_advance_moves_the_train_along_the_loop(app, catalog, trains):
     assert (Vec3(*after) - Vec3(*before)).length() > 1.0, "列车没有真的动起来"
 
     # 摆位仍然精确：跑起来之后转向架依旧压在轨道上
-    spec = trains["green_skin_10"]
+    spec = green
     for index, car in enumerate(spec.cars):
         node = view.node_for(index)
         for local_x in (car.bogie_half_spacing, -car.bogie_half_spacing):
@@ -805,10 +805,10 @@ def test_advance_moves_the_train_along_the_loop(app, catalog, trains):
     view.destroy()
 
 
-def test_braking_stops_the_train(app, catalog, trains):
+def test_braking_stops_the_train(app, catalog, fuxing):
     layout, first = build_circle(catalog)
     path = loop_of(catalog, (first, "a"), layout)
-    view = TrainView(trains["cr400af_8"], app.render)
+    view = TrainView(fuxing, app.render)
     view.set_handle(1.0)
     for _ in range(100):
         view.advance(0.1, path)
@@ -821,19 +821,19 @@ def test_braking_stops_the_train(app, catalog, trains):
     view.destroy()
 
 
-def test_triangle_count_covers_every_car(app, trains):
+def test_triangle_count_covers_every_car(app, green):
     """三角形统计要按节数算 —— 屏幕上画的就是这么多。"""
-    spec = trains["green_skin_10"]
+    spec = green
     view = TrainView(spec, app.render)
-    single = TrainView(trains["green_skin_10"], app.render)
+    single = TrainView(green, app.render)
     assert single.triangle_count() > 0
     assert view.triangle_count() == single.triangle_count()
     view.destroy()
     single.destroy()
 
 
-def test_speed_readout_is_kmh(app, trains):
-    view = TrainView(trains["crh380a_8"], app.render)
+def test_speed_readout_is_kmh(app, hexie):
+    view = TrainView(hexie, app.render)
     view.state.v = 10.0
     assert view.speed_kmh() == pytest.approx(36.0)
     view.destroy()

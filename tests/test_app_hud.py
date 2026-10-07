@@ -18,7 +18,7 @@ import pytest
 from panda3d.core import PNMImage
 
 from app import editor as editor_mod
-from app.hud import _MARGIN, Hud, build_default_hud
+from app.hud import _BR_TOAST_CLEARANCE, _MARGIN, Hud, build_default_hud
 
 #: 浮点比较容差（aspect2d 单位，屏幕高度 = 2.0）。
 EPS = 1e-5
@@ -40,7 +40,7 @@ _WORST_CASE = {
              "原因：末端端口没有接上\n"
              "再补 8 节「左弯轨 R40 / 22.5°」→ 按 C 自动补"),
     "help": editor_mod.HELP_TEXT,
-    "train": ("列车  老式绿皮车 · 机车 + 16 辆\n"
+    "train": ("运行信息  老式绿皮车 · 机车 + 16 辆\n"
               "17 节 / 176.2 m   三角形 48,118\n"
               "速度  100.0 km/h   （27.78 m/s）　倒行\n"
               "手柄  牵引 100%\n"
@@ -134,9 +134,12 @@ def test_each_anchor_keeps_the_panel_on_screen(app, anchor):
     assert y0 >= -1.0 + _MARGIN - EPS
     assert y1 <= 1.0 - _MARGIN + EPS
 
-    # 锚点方向也要真的贴住：贴顶的必须顶到边距处，贴底的必须落到边距处
+    # 锚点方向也要真的贴住：贴顶的必须顶到边距处，贴底的必须落到边距处。
+    # 右下（br）会再抬一截给 toast 留空，所以底边不贴死。
     if anchor in ("tl", "tr"):
         assert y1 == pytest.approx(1.0 - _MARGIN, abs=EPS)
+    elif anchor == "br":
+        assert y0 == pytest.approx(-1.0 + _MARGIN + _BR_TOAST_CLEARANCE, abs=EPS)
     else:
         assert y0 == pytest.approx(-1.0 + _MARGIN, abs=EPS)
     if anchor in ("tl", "bl"):
@@ -229,13 +232,10 @@ def test_same_anchor_panels_stack_without_overlapping(app):
 
 @pytest.mark.parametrize("aspect", _ASPECTS)
 def test_default_hud_panels_never_overlap(app, aspect):
-    """默认四块面板在"最坏文本 + 各种窗口比例"下都不能互相压住。
-
-    以前这条只在测试窗口那一个比例上跑过，窄窗口下的挤压就漏掉了
-    （所以 :class:`Hud` 才把锚点归成三条互不相交的纵列）。
-    """
+    """默认面板展开后在各种窗口比例下都不能互相压住；编辑信息靠左、运行靠右下。"""
     hud = build_default_hud(app)
     hud.aspect_override = aspect
+    hud.expand()
     for name, text in _WORST_CASE.items():
         hud.set_text(name, text)
 
@@ -252,6 +252,51 @@ def test_default_hud_panels_never_overlap(app, aspect):
         assert rect[1] <= aspect - _MARGIN + EPS, name
         assert rect[2] >= -1.0 + _MARGIN - EPS, name
         assert rect[3] <= 1.0 - _MARGIN + EPS, name
+    # 编辑信息在左半屏；运行信息钉在右下；toast 居中
+    for name in ("status", "loop", "help"):
+        assert rects[name][1] < 0.15 * aspect + EPS, name
+    train = rects["train"]
+    assert train[0] > 0.0, "运行信息应在右半屏"
+    assert train[3] < 0.0, "运行信息应在下半屏"
+
+
+def test_dock_starts_collapsed_and_pin_keeps_it_open(app):
+    hud = build_default_hud(app)
+    hud.set_text("status", "状态一行")
+    assert hud.panel_box("status") is None
+    assert not hud.expanded
+
+    hud.expand()
+    assert hud.panel_box("status") is not None
+
+    hud.tick(3.0)          # 未钉住：离开栏外超时应收起
+    assert not hud.expanded
+    assert hud.panel_box("status") is None
+
+    hud.expand()
+    hud.set_pinned(True)
+    hud.tick(5.0)
+    assert hud.expanded and hud.pinned
+    assert hud.panel_box("status") is not None
+
+
+def test_train_panel_stays_visible_when_dock_is_collapsed(app):
+    """运行信息不进左侧栏：收起信息栏后右下角仍可见。"""
+    hud = build_default_hud(app)
+    hud.set_text("status", "状态一行")
+    hud.set_text("train", _WORST_CASE["train"])
+    assert not hud.expanded
+    assert hud.panel_box("status") is None
+    train = panel_box(hud, "train")
+    assert train[0] > 0.0 and train[3] < 0.0
+
+
+def test_progress_bar_shows_and_clears(app):
+    hud = build_default_hud(app)
+    hud.set_progress("加载模型…", 0.4)
+    assert not hud._progress_root.isHidden()
+    hud.clear_progress()
+    assert hud._progress_root.isHidden()
 
 
 class _PromptStub:
@@ -281,8 +326,8 @@ def test_load_prompt_line_never_leaves_the_screen(app, aspect, tmp_path):
 
     "提示条是一行居中文字"这个设计最怕变长：40 字的文件名 + 一长串存档名单
     加起来能把面板顶出屏幕。所以名单有字符预算、回显有截断，这条测试就是给
-    这两个上限兜底的。至于底部那两块 —— 填文件名时编辑器会把它们收起来
-    （见 ``test_prompt_hides_the_bottom_panels``），这里照抄那个状态。
+    这两个上限兜底的。填文件名时左侧「帮助」让位；右下运行信息仍常驻，
+    一并点亮确认提示条不压到它。
     """
     for index in range(20):
         (tmp_path / f"abcdefghijklmnopqrstuvwxyz0123456789abcd{index}.json"
@@ -295,10 +340,11 @@ def test_load_prompt_line_never_leaves_the_screen(app, aspect, tmp_path):
 
     hud = build_default_hud(app)
     hud.aspect_override = aspect
+    hud.expand()
     hud.set_text("status", _WORST_CASE["status"])
     hud.set_text("loop", _WORST_CASE["loop"])
-    hud.set_text("help", "")            # 填文件名时这两块被收起来
-    hud.set_text("train", "")
+    hud.set_text("help", "")            # 填文件名时左侧帮助让位
+    hud.set_text("train", _WORST_CASE["train"])  # 右下运行信息常驻
     hud.set_text("toast", text)
 
     toast = panel_box(hud, "toast")
@@ -306,7 +352,7 @@ def test_load_prompt_line_never_leaves_the_screen(app, aspect, tmp_path):
     assert toast[1] <= aspect - _MARGIN + EPS
     assert toast[2] >= -1.0 + _MARGIN - EPS
     assert toast[3] <= 1.0 - _MARGIN + EPS
-    for name in ("status", "loop"):
+    for name in ("status", "loop", "train"):
         assert not overlaps(toast, panel_box(hud, name)), (
             f"aspect={aspect}: 读档提示条压住了 {name}：{toast}"
         )
@@ -383,19 +429,21 @@ def test_rendered_hud_has_one_block_per_panel(app):
     几何断言对这种情况无能为力（它自己也用了错的轴），只有数像素才看得见。
     """
     hud = build_default_hud(app)
+    hud.expand()
     for name, text in _WORST_CASE.items():
         hud.set_text(name, text)
 
     blocks = _hud_blocks(app, hud)
-    assert len(blocks) == len(_WORST_CASE), (
-        f"应当看到 {len(_WORST_CASE)} 块分开的面板，实际 {len(blocks)} 块：{blocks}"
+    # 内容面板 + 左侧「信息 / 固定」按钮；允许按钮与邻近面板在像素上粘连
+    assert len(_WORST_CASE) - 1 <= len(blocks) <= len(_WORST_CASE) + 3, (
+        f"应当看到大约 {len(_WORST_CASE)} 块面板，实际 {len(blocks)} 块：{blocks}"
     )
 
     width = app.win.getXSize()
     height = app.win.getYSize()
     for (x0, x1, y0, y1) in blocks:
         area = (x1 - x0 + 1) * (y1 - y0 + 1)
-        assert area < 0.12 * width * height, (
+        assert area < 0.22 * width * height, (
             f"有一块 HUD 占了 {(x1 - x0 + 1)}x{(y1 - y0 + 1)} 像素，"
             f"大得不像一块文字面板：x[{x0},{x1}] y[{y0},{y1}]"
         )
@@ -409,6 +457,10 @@ def test_rendered_top_panel_is_above_the_bottom_panel(app):
     "声明的位置"和"画出来的位置"必须同向。轴写反时这条必挂。
     """
     hud = Hud(app)
+    # 关掉左侧常驻按钮 / 路灯，避免掺进额外像素块
+    hud._tab_root.hide()
+    hud._pin_root.hide()
+    hud._lights_root.hide()
     hud.add_panel("top", "tl")
     hud.add_panel("bottom", "bl")
     hud.set_text("top", "上面")

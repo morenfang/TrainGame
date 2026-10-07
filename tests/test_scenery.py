@@ -239,6 +239,9 @@ def test_station_footprint_label_names_the_style():
     (sc.HOUSE_TOWER, "高楼"),
     (sc.HOUSE_MALL, "商场"),
     (sc.HOUSE_SHOP, "便利店"),
+    (sc.HOUSE_SLAB, "板楼"),
+    (sc.HOUSE_BLOCK, "公寓"),
+    (sc.HOUSE_VILLA, "别墅"),
 ])
 def test_house_footprint_label_names_the_kind(kind, label):
     house = sc.House(x=0.0, z=0.0, kind=kind)
@@ -247,6 +250,7 @@ def test_house_footprint_label_names_the_kind(kind, label):
 
 @pytest.mark.parametrize("kind", [
     sc.HOUSE_COTTAGE, sc.HOUSE_TOWER, sc.HOUSE_MALL, sc.HOUSE_SHOP,
+    sc.HOUSE_SLAB, sc.HOUSE_BLOCK, sc.HOUSE_VILLA,
 ])
 def test_every_house_kind_bakes_renderable_geometry(app, kind):
     node = sc.build_scenery(sc.Scenery(
@@ -256,26 +260,118 @@ def test_every_house_kind_bakes_renderable_geometry(app, kind):
     assert geom.getPrimitive(0).getNumPrimitives() > 0
 
 
-@pytest.mark.parametrize("kind,label", [
-    (sc.TREE_PINE, "针叶松"),
-    (sc.TREE_OAK, "阔叶树"),
-    (sc.TREE_POPLAR, "白杨"),
-    (sc.TREE_PALM, "棕榈"),
-])
+def test_attach_street_lights_adds_point_lights(app):
+    scenery = sc.Scenery(houses=(
+        sc.House(x=0.0, z=0.0, kind=sc.HOUSE_COTTAGE, seed=1),
+        sc.House(x=20.0, z=0.0, kind=sc.HOUSE_TOWER, seed=2,
+                 width=12, depth=12, height=24),
+    ))
+    node = sc.build_scenery(scenery)
+    node.reparentTo(app.render)
+    holder = sc.attach_street_lights(app.render, scenery)
+    assert not holder.isEmpty()
+    assert holder.getNumChildren() >= 3  # ambient + ≥2 lamps
+
+
+def test_reattach_street_lights_does_not_stack(app):
+    """每重建一次布景都会重挂灯；旧灯的 setLight 必须清掉，否则越放越亮。"""
+    scenery = sc.Scenery(houses=(
+        sc.House(x=0.0, z=0.0, kind=sc.HOUSE_COTTAGE, seed=1),
+    ))
+    sc.attach_street_lights(app.render, scenery)
+    first = app.render.find("street_lights").getNumChildren()
+    denser = sc.Scenery(houses=(
+        sc.House(x=0.0, z=0.0, kind=sc.HOUSE_COTTAGE, seed=1),
+        sc.House(x=15.0, z=0.0, kind=sc.HOUSE_SHOP, seed=2),
+        sc.House(x=30.0, z=0.0, kind=sc.HOUSE_VILLA, seed=3),
+    ))
+    sc.attach_street_lights(app.render, denser)
+    sc.attach_street_lights(app.render, denser)
+    holders = app.render.findAllMatches("street_lights")
+    assert holders.getNumPaths() == 1
+    # ambient + 3 盏；反复 attach 也不该涨到 2× / 3×
+    assert app.render.find("street_lights").getNumChildren() == first + 2
+
+
+def test_street_lamp_pick_defaults_to_every_house():
+    """默认不抽稀：每栋门前灯都进名单，增减房屋也不会挤灭别人。"""
+    base = [(float(i * 10), 3.0, 0.0) for i in range(20)]
+    assert sc.pick_street_lamp_positions(base) == base
+    grown = base + [(205.0, 3.0, 0.0)]
+    assert sc.pick_street_lamp_positions(grown) == grown
+
+
+def test_street_lamp_pick_is_stable_when_capped():
+    """显式封顶时，多一栋房子应尽量保留已入选灯位（不能整表重抽）。"""
+    base = [(float(i * 10), 3.0, 0.0) for i in range(20)]
+    first = set(sc.pick_street_lamp_positions(base, max_lights=8))
+    grown = base + [(205.0, 3.0, 0.0)]
+    second = set(sc.pick_street_lamp_positions(grown, max_lights=8))
+    assert len(first & second) >= 7
+
+
+def test_attach_street_lights_lights_every_house(app):
+    houses = tuple(
+        sc.House(x=float(i * 12), z=0.0, kind=sc.HOUSE_COTTAGE, seed=i)
+        for i in range(16)
+    )
+    scenery = sc.Scenery(houses=houses)
+    holder = sc.attach_street_lights(app.render, scenery)
+    # ambient + 每栋一盏
+    assert holder.getNumChildren() == 1 + len(houses)
+
+
+def test_attach_street_lights_respects_enabled_flag(app):
+    scenery = sc.Scenery(houses=(
+        sc.House(x=0.0, z=0.0, kind=sc.HOUSE_COTTAGE, seed=1),
+    ))
+    sc.attach_street_lights(app.render, scenery, enabled=True)
+    assert not app.render.find("street_lights").isEmpty()
+    sc.attach_street_lights(app.render, scenery, enabled=False)
+    assert app.render.find("street_lights").isEmpty()
+@pytest.mark.parametrize("kind,label", list(sc.TREE_KIND_LABELS.items()))
 def test_tree_footprint_label_names_the_kind(kind, label):
     tree = sc.Tree(x=0.0, z=0.0, kind=kind)
     assert label in tree.footprint().label
 
 
-@pytest.mark.parametrize("kind", [
-    sc.TREE_PINE, sc.TREE_OAK, sc.TREE_POPLAR, sc.TREE_PALM,
-])
+@pytest.mark.parametrize("kind", list(sc.TREE_KIND_LABELS))
 def test_every_tree_kind_bakes_renderable_geometry(app, kind):
     node = sc.build_scenery(sc.Scenery(
         trees=(sc.Tree(x=0.0, z=0.0, kind=kind, seed=5),)))
     node.reparentTo(app.render)
     geom = node.node().getGeom(0)
     assert geom.getPrimitive(0).getNumPrimitives() > 0
+
+
+@pytest.mark.parametrize("kind", list(sc.PEAK_KIND_LABELS))
+def test_every_peak_kind_bakes_renderable_geometry(app, kind):
+    peak = sc.Peak(x=0.0, z=0.0, radius=20.0, height=18.0, seed=3, kind=kind,
+                   rocky=True, snow=(kind in (sc.PEAK_MOUNTAIN, sc.PEAK_SNOW)))
+    node = sc.build_scenery(sc.Scenery(peaks=(peak,)))
+    node.reparentTo(app.render)
+    geom = node.node().getGeom(0)
+    assert geom.getPrimitive(0).getNumPrimitives() > 0
+
+
+@pytest.mark.parametrize("size", list(sc.LAKE_SIZE_RADIUS))
+def test_every_lake_size_bakes_and_reports_footprint(app, size):
+    lake = sc.Lake(x=0.0, z=0.0, radius=sc.LAKE_SIZE_RADIUS[size],
+                   beach=3.0, seed=2, size=size)
+    assert sc.LAKE_SIZE_LABELS[size] in lake.footprint().label
+    node = sc.build_scenery(sc.Scenery(lakes=(lake,)))
+    node.reparentTo(app.render)
+    assert node.node().getGeom(0).getPrimitive(0).getNumPrimitives() > 0
+
+
+@pytest.mark.parametrize("size", list(sc.MEADOW_SIZE_RADIUS))
+def test_every_meadow_size_bakes_and_reports_footprint(app, size):
+    meadow = sc.Meadow(x=0.0, z=0.0, radius=sc.MEADOW_SIZE_RADIUS[size],
+                       seed=4, size=size)
+    assert sc.MEADOW_SIZE_LABELS[size] in meadow.footprint().label
+    node = sc.build_scenery(sc.Scenery(meadows=(meadow,)))
+    node.reparentTo(app.render)
+    assert node.node().getGeom(0).getPrimitive(0).getNumPrimitives() > 0
 
 
 def test_station_with_platform_extends_its_footprint_forward():
@@ -289,12 +385,16 @@ def test_station_with_platform_extends_its_footprint_forward():
 
 
 def test_scenery_serialization_round_trips_placeables():
-    """手工布景（房 / 车站 / 山 / 树）存了再读必须逐字段一致。"""
+    """手工布景（房 / 车站 / 山 / 树 / 湖 / 绿地）存了再读必须逐字段一致。"""
     scenery = sc.Scenery(
         houses=(sc.House(x=1.0, z=2.0, heading=0.3, seed=7),),
         stations=(sc.Station(x=4.0, z=5.0, style=sc.STATION_MODERN, seed=8),),
-        peaks=(sc.Peak(x=6.0, z=7.0, radius=10.0, height=20.0, seed=9),),
-        trees=(sc.Tree(x=8.0, z=9.0, height=11.0, seed=10),),
+        peaks=(sc.Peak(x=6.0, z=7.0, radius=10.0, height=20.0, seed=9,
+                       kind=sc.PEAK_VOLCANO),),
+        trees=(sc.Tree(x=8.0, z=9.0, height=11.0, seed=10, kind=sc.TREE_WILLOW),),
+        lakes=(sc.Lake(x=0.0, z=1.0, radius=14.0, beach=3.0, seed=11,
+                       size="lake_s"),),
+        meadows=(sc.Meadow(x=2.0, z=3.0, radius=12.0, seed=12, size="meadow_s"),),
     )
     restored = sc.scenery_from_dict(sc.scenery_to_dict(scenery))
     assert restored == scenery
@@ -308,17 +408,40 @@ def test_scenery_from_dict_tolerates_missing_and_unknown_keys():
     assert sc.scenery_from_dict(None).item_count == 0
 
 
+def test_apply_placeables_dict_keeps_missing_fields():
+    """旧存档没有 lakes 键时，预设里的湖不能被盖成空。"""
+    base = sc.Scenery(
+        lakes=(sc.Lake(x=0.0, z=0.0, radius=20.0, seed=1),),
+        meadows=(sc.Meadow(x=1.0, z=1.0, radius=10.0, seed=2),),
+        houses=(sc.House(x=2.0, z=2.0),),
+    )
+    patched = sc.apply_placeables_dict(base, {
+        "houses": [{"x": 9.0, "z": 9.0}],
+        "trees": [{"x": 3.0, "z": 3.0, "height": 8.0}],
+    })
+    assert len(patched.lakes) == 1 and patched.lakes[0].radius == 20.0
+    assert len(patched.meadows) == 1
+    assert patched.houses[0].x == 9.0
+    assert len(patched.trees) == 1
+    # 显式写空列表才是"删光"
+    cleared = sc.apply_placeables_dict(base, {"lakes": []})
+    assert not cleared.lakes and len(cleared.meadows) == 1
+
+
 def test_placeable_items_and_without_item():
     scenery = sc.Scenery(
         houses=(sc.House(0.0, 0.0), sc.House(1.0, 1.0)),
         stations=(sc.Station(2.0, 2.0),),
         peaks=(sc.Peak(3.0, 3.0, 10.0, 10.0),),
         trees=(sc.Tree(4.0, 4.0),),
+        lakes=(sc.Lake(5.0, 5.0, 12.0),),
+        meadows=(sc.Meadow(6.0, 6.0, 8.0),),
     )
     keys = [(key, index) for key, index, _ in sc.placeable_items(scenery)]
     assert keys == [("houses", 0), ("houses", 1), ("stations", 0),
-                    ("peaks", 0), ("trees", 0)]
+                    ("peaks", 0), ("trees", 0), ("lakes", 0), ("meadows", 0)]
 
     without = sc.without_item(scenery, "houses", 0)
     assert [h.x for h in without.houses] == [1.0]
     assert len(without.stations) == 1 and len(without.peaks) == 1
+    assert len(without.lakes) == 1 and len(without.meadows) == 1

@@ -156,7 +156,7 @@ def test_unwelded_ring_is_still_traced_as_a_loop(catalog):
     assert layout.free_ports() == [(first, "a"), (first + 7, "b")]
 
 
-def test_unwelded_ring_is_drivable_by_a_train(catalog):
+def test_unwelded_ring_is_drivable_by_a_train(catalog, green):
     """闭环判据的最终目的：列车能一直跑下去，而不是停在缝上。"""
     from core.train.consist import TrainCatalog
     from core.train.dynamics import TrainState, step
@@ -165,7 +165,7 @@ def test_unwelded_ring_is_drivable_by_a_train(catalog):
     report, path = detect_closure(layout, allow_open=True)
     assert report.closed and path is not None and path.closed
 
-    spec = TrainCatalog.builtin()["green_skin_10"]
+    spec = green
     state = TrainState(s=spec.total_length, v=0.0, throttle=1.0, brake=0.0,
                        direction=1.0)
     for _ in range(3000):                      # 300 s，足够绕好几圈
@@ -194,7 +194,7 @@ def test_an_open_chain_whose_gap_is_real_is_still_not_a_loop(catalog):
     assert abs(report.gap_heading) == pytest.approx(DEG(45.0), rel=1e-9)
 
 
-def test_the_reported_stall_in_layout_json_is_gone(catalog):
+def test_the_reported_stall_in_layout_json_is_gone(catalog, green):
     """**用户报的那个 #40 → #39 卡死**：直接拿实盘存档回归。
 
     ``saves/layout.json`` 是 38 件的一条链，首尾端口 ``39/b`` 与 ``40/b`` 相距
@@ -222,7 +222,7 @@ def test_the_reported_stall_in_layout_json_is_gone(catalog):
     from core.train.consist import TrainCatalog
     from core.train.dynamics import TrainState, step
 
-    spec = TrainCatalog.builtin()["green_skin_10"]
+    spec = green
     state = TrainState(s=spec.total_length, v=0.0, throttle=1.0, brake=0.0,
                        direction=1.0)
     for _ in range(6000):                      # 600 s ≈ 好几圈

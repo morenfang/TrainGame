@@ -20,6 +20,9 @@ Thumbs.db
 *.log
 train3d_log.txt
 
+# 模型优化前的备份（scripts/optimize_train_glb.py）
+models/*.glb.bak
+
 # 打包产物（scripts/build_exe.py 生成）
 build/
 dist/

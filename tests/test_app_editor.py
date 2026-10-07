@@ -47,12 +47,35 @@ class FakeHud:
     def __init__(self):
         self.texts: dict[str, str] = {}
         self.visible = True
+        self.expanded = False
+        self.pinned = False
+        self.progress: list[tuple[str, float]] = []
+        self.street_lights_on = True
+        self.on_toggle_street_lights = None
 
     def set_text(self, name: str, text: str) -> None:
         self.texts[name] = text
 
     def set_visible(self, flag: bool) -> None:
         self.visible = flag
+
+    def tick(self, dt: float) -> None:
+        return None
+
+    def handle_click(self) -> bool:
+        return False
+
+    def toggle_expanded(self) -> None:
+        self.expanded = not self.expanded
+
+    def set_progress(self, message: str, fraction: float) -> None:
+        self.progress.append((message, fraction))
+
+    def toggle_street_lights(self) -> bool:
+        self.street_lights_on = not self.street_lights_on
+        if self.on_toggle_street_lights is not None:
+            self.on_toggle_street_lights(self.street_lights_on)
+        return self.street_lights_on
 
 
 # --------------------------------------------------------------------------- #
@@ -766,6 +789,9 @@ def test_open_prompt_rejects_a_missing_file_without_touching_the_layout(app, edi
     before = editor.layout.to_dict()
 
     editor.begin_open_as()
+    assert editor._prompt == editor_mod.PROMPT_LOAD_CONFIRM
+    editor._load_confirm_discard()
+    assert editor._prompt == editor_mod.PROMPT_LOAD
     for key in ("n", "o", "p", "e"):
         editor._name_append(key)
     editor._confirm_file_prompt()
@@ -804,23 +830,78 @@ def test_open_prompt_blocks_editor_shortcuts_while_typing(app, editor, tmp_path)
     editor.bind()
 
     app.messenger.send("control-o")
-    app.messenger.send("n")
+    assert editor._prompt == editor_mod.PROMPT_LOAD_CONFIRM
+    app.messenger.send("n")                      # 确认：不保存
+    assert editor._prompt == editor_mod.PROMPT_LOAD
+    app.messenger.send("n")                      # 填名：字母 n
     assert editor._prompt_buffer == "n"
     assert editor.train_view is None
     editor._exit_file_prompt()
 
 
+def test_ctrl_o_asks_to_save_before_replacing_the_scene(app, editor, tmp_path):
+    """有未保存改动时 Ctrl+O 先问保存；N 后读档会换掉当前场景。"""
+    piece = straight_piece(editor.catalog)
+    build_chain(editor, piece.id, 3)
+    editor.bind()
+    send = app.messenger.send
+
+    send("control-s")
+    for key in ("o", "t", "h", "e", "r"):
+        send(key)
+    send("enter")
+    other = editor.layout.to_dict()
+
+    editor.clear()
+    build_chain(editor, piece.id, 1)
+    assert editor.has_unsaved_work()
+
+    send("control-o")
+    assert editor._prompt == editor_mod.PROMPT_LOAD_CONFIRM
+    assert "未保存" in editor._prompt_text()
+
+    send("escape")
+    assert editor._prompt is None
+    assert len(editor.layout) == 1
+
+    send("control-o")
+    send("n")
+    assert editor._prompt == editor_mod.PROMPT_LOAD
+    for key in ("o", "t", "h", "e", "r"):
+        send(key)
+    send("enter")
+    assert editor._prompt is None
+    assert editor.layout.to_dict() == other
+    assert not editor.has_unsaved_work()
+
+
 def test_prompt_hides_the_bottom_panels(app, editor, tmp_path):
-    """填文件名时，底部的「帮助」面板让位 —— 提示条那一行才长得下。"""
+    """填文件名时左侧「帮助」让位；右下运行信息有车时仍常驻。"""
     editor.bind()
     editor.begin_open_as()
     editor.tick()
     assert editor.hud.texts["help"] == ""
     assert "读档" in editor.hud.texts["toast"]
+    # 没上列车时运行信息本就是空的
+    assert editor.hud.texts.get("train", "") == ""
 
     editor._exit_file_prompt()
     editor.tick()
     assert editor.hud.texts["help"] == editor_mod.HELP_TEXT
+
+
+def test_train_running_info_stays_on_during_file_prompt(app, editor, tmp_path):
+    """有车时，读档提示条不把右下运行信息收掉。"""
+    close_a_circle(editor)
+    editor.spawn_train(1)
+    editor.tick()
+    assert "运行信息" in editor.hud.texts["train"]
+
+    editor.begin_open_as()
+    editor.tick()
+    assert editor.hud.texts["help"] == ""
+    assert "运行信息" in editor.hud.texts["train"]
+    assert "读档" in editor.hud.texts["toast"]
 
 
 # --------------------------------------------------------------------------- #
@@ -1259,9 +1340,11 @@ def test_key_bindings_do_what_the_help_says(app, editor):
     send("l")
     assert editor.view.show_loop is False
 
-    assert editor.hud.visible is True
+    assert editor.hud.expanded is False
     send("h")
-    assert editor.hud.visible is False
+    assert editor.hud.expanded is True
+    send("h")
+    assert editor.hud.expanded is False
 
     # 撤销
     piece = straight_piece(editor.catalog)
@@ -1968,7 +2051,7 @@ def test_deleting_a_piece_off_the_train_keeps_it_running(app, editor):
 def test_help_text_documents_the_train_keys(app, editor):
     editor._refresh_hud()
     help_text = editor.hud.texts["help"]
-    for token in ("N 召唤列车", "M 收起", "↑ 牵引", "↓ 制动", "空格", "K 换向"):
+    for token in ("N 上列车", "↑↓ 手柄", "空格", "K 换向"):
         assert token in help_text, f"帮助里没提 {token}"
 
 
@@ -2020,7 +2103,9 @@ def test_scenery_number_key_selects_item_in_category(app, editor):
     """布景模式下数字键选的是布景物件，而不是轨道件。"""
     editor.bind()
     editor.toggle_scenery_mode()
-    app.messenger.send("3")                            # 建筑分类 → 商场
+    app.messenger.send("3")                            # 建筑分类 → 公寓
+    assert editor.current_scenery_kind() == "block"
+    app.messenger.send("6")                            # → 商场
     assert editor.current_scenery_kind() == "mall"
     editor.cycle_scenery_category(1)                   # → 车站
     app.messenger.send("2")                            # 车站分类 → 新式车站
@@ -2034,10 +2119,31 @@ def test_scenery_hover_picks_and_delete_removes(app, editor):
     assert len(editor.user_scenery.houses) == 1
 
     editor._refresh_hover()
-    assert editor.hover_scenery == ("houses", 0), "落下的房屋应当能被拾取到"
+    assert editor.hover_scenery == ("user", "houses", 0), "落下的房屋应当能被拾取到"
 
     editor.delete_scenery_under_cursor()
     assert len(editor.user_scenery.houses) == 0
+
+
+def test_base_scenery_house_can_be_deleted_and_undone(app, editor):
+    """场景自带的房子也能在布景模式里删掉，撤销后回来。"""
+    from render.scenery import House, Scenery
+
+    editor.base_scenery = Scenery(houses=(
+        House(x=5.0, z=5.0, width=8.0, depth=6.0, height=4.0, seed=1),
+    ))
+    editor._rebuild_scenery()
+    editor.toggle_scenery_mode()
+    aim_world(editor, app, (5.0, style.GROUND_Y, 5.0))
+    editor._refresh_hover()
+    assert editor.hover_scenery == ("base", "houses", 0)
+
+    editor.delete_scenery_under_cursor()
+    assert len(editor.base_scenery.houses) == 0
+    assert editor._base_scenery_edited
+
+    editor.undo()
+    assert len(editor.base_scenery.houses) == 1
 
 
 def test_scenery_placement_is_undoable_and_redoable(app, editor):
@@ -2063,6 +2169,53 @@ def test_user_scenery_survives_a_save_and_load(app, editor):
     assert editor.load()
     assert len(editor.user_scenery.houses) == 1
 
+
+def test_scenery_catalog_has_mountains_trees_lakes_and_meadows(app, editor):
+    """布景模式须含山 / 树 / 湖 / 绿地，且每档都能放下。"""
+    from app.editor import SCENERY_CATEGORIES, SCENERY_ITEMS
+
+    assert "mountain" in SCENERY_CATEGORIES
+    assert "tree" in SCENERY_CATEGORIES
+    assert "lake" in SCENERY_CATEGORIES
+    assert "meadow" in SCENERY_CATEGORIES
+    assert len(SCENERY_ITEMS["mountain"]) >= 5
+    assert len(SCENERY_ITEMS["tree"]) >= 6
+    assert len(SCENERY_ITEMS["lake"]) == 5
+    assert len(SCENERY_ITEMS["meadow"]) == 5
+
+    editor.toggle_scenery_mode()
+    aim_world(editor, app, (0.0, style.GROUND_Y, 0.0))
+
+    # 山 → 大山
+    while editor.scenery_category != "mountain":
+        editor.cycle_scenery_category(1)
+    field, _ = editor.place_scenery()
+    assert field == "peaks"
+    assert editor.user_scenery.peaks[0].kind == scenery_mod.PEAK_MOUNTAIN
+
+    # 树 → 云杉（第 5 件）
+    while editor.scenery_category != "tree":
+        editor.cycle_scenery_category(1)
+    editor.select_scenery_kind(4)
+    field, _ = editor.place_scenery()
+    assert field == "trees"
+    assert editor.user_scenery.trees[-1].kind == scenery_mod.TREE_SPRUCE
+
+    # 湖 → 中湖（第 3 件）
+    while editor.scenery_category != "lake":
+        editor.cycle_scenery_category(1)
+    editor.select_scenery_kind(2)
+    field, _ = editor.place_scenery()
+    assert field == "lakes"
+    assert editor.user_scenery.lakes[-1].size == "lake_m"
+
+    # 绿地 → 大草原（第 5 件）
+    while editor.scenery_category != "meadow":
+        editor.cycle_scenery_category(1)
+    editor.select_scenery_kind(4)
+    field, _ = editor.place_scenery()
+    assert field == "meadows"
+    assert editor.user_scenery.meadows[-1].size == "meadow_xl"
 
 
 

@@ -39,10 +39,14 @@ import random
 from dataclasses import asdict, dataclass, fields
 from typing import Iterator, Sequence
 
-from panda3d.core import NodePath
+from panda3d.core import AmbientLight, NodePath, PointLight, Vec4
 
 from render import style
 from render.mesh import MeshBuilder
+
+#: 历史兼容：调用方仍可传 ``max_lights`` 做性能测试；默认不封顶，
+#: 每栋建筑门前都点亮，避免增减房屋时灯位被挤掉看起来像"随机开关"。
+_MAX_STREET_LIGHTS: int | None = None
 
 #: 无 alpha 的颜色（``shade`` 会原样透传 alpha，布景全是不透明的）。
 Color = tuple[float, float, float, float]
@@ -244,11 +248,32 @@ class Footprint:
 # 布景物：纯数据
 # --------------------------------------------------------------------------- #
 
+#: 山体样式（``Peak.kind``）：决定显示名，并配合半径 / 高度 / 岩石 / 雪线区分外形。
+PEAK_MOUNTAIN = "mountain"   # 大山（带雪）
+PEAK_HILL = "hill"           # 草丘
+PEAK_RIDGE = "ridge"         # 矮宽山梁
+PEAK_CRAG = "crag"           # 岩峰
+PEAK_SNOW = "snow"           # 雪山
+PEAK_MESA = "mesa"           # 平顶台地
+PEAK_VOLCANO = "volcano"     # 火山锥
+
+PEAK_KIND_LABELS = {
+    PEAK_MOUNTAIN: "大山",
+    PEAK_HILL: "山丘",
+    PEAK_RIDGE: "山梁",
+    PEAK_CRAG: "岩峰",
+    PEAK_SNOW: "雪山",
+    PEAK_MESA: "台地",
+    PEAK_VOLCANO: "火山",
+}
+
+
 @dataclass(frozen=True)
 class Peak:
     """一座山头（低模圆锥，可以带岩石与雪线）。
 
     ``rough`` 是轮廓的随机起伏幅度：0 就是一个规规矩矩的圆锥，0.2 左右才像山。
+    ``kind`` 只影响显示名；外形由半径 / 高度 / 岩石 / 雪线决定。
     """
 
     x: float
@@ -261,17 +286,19 @@ class Peak:
     rough: float = 0.20
     rocky: bool = True
     snow: bool = True
+    kind: str = PEAK_MOUNTAIN
 
     @classmethod
     def hill(cls, x: float, z: float, radius: float, height: float, *,
              seed: int = 0, sides: int = 12) -> "Peak":
         """一个草丘：没有岩石、没有雪，起伏也小。"""
         return cls(x=x, z=z, radius=radius, height=height, seed=seed, sides=sides,
-                   rings=3, rough=0.14, rocky=False, snow=False)
+                   rings=3, rough=0.14, rocky=False, snow=False, kind=PEAK_HILL)
 
     def footprint(self) -> Footprint:
+        label = PEAK_KIND_LABELS.get(self.kind, "山体")
         return Footprint(x=self.x, z=self.z, half_x=self.radius, half_z=self.radius,
-                         label=f"山体({self.height:.0f}m)", round_=True)
+                         label=f"{label}({self.height:.0f}m)", round_=True)
 
 
 @dataclass(frozen=True)
@@ -300,6 +327,23 @@ class River:
         return self.distance_to(px, pz) <= self.width * 0.5
 
 
+#: 湖泊五档尺寸（布景模式直选用），从小到大。
+LAKE_SIZE_LABELS = {
+    "pond": "小水塘",
+    "lake_s": "小湖",
+    "lake_m": "中湖",
+    "lake_l": "大湖",
+    "lake_xl": "巨型湖",
+}
+LAKE_SIZE_RADIUS = {
+    "pond": 8.0,
+    "lake_s": 14.0,
+    "lake_m": 24.0,
+    "lake_l": 38.0,
+    "lake_xl": 55.0,
+}
+
+
 @dataclass(frozen=True)
 class Lake:
     """一个湖：``radius`` 是平均半径，轮廓按种子抖一圈（不是正圆）。"""
@@ -310,6 +354,8 @@ class Lake:
     beach: float = 5.0
     seed: int = 0
     sides: int = 28
+    #: 尺寸档 id（``pond`` / ``lake_s``…）；空串则只按半径显示。
+    size: str = ""
 
     def outline(self, scale: float = 1.0) -> tuple[Point2, ...]:
         """湖岸轮廓；``scale`` 可以再把轮廓整体缩放一次（做深水的内圈）。"""
@@ -342,12 +388,21 @@ class Lake:
             for i in range(count)
         )
 
+    def footprint(self) -> Footprint:
+        label = LAKE_SIZE_LABELS.get(self.size, "湖泊")
+        reach = self.radius + self.beach
+        return Footprint(x=self.x, z=self.z, half_x=reach, half_z=reach,
+                         label=f"{label}(R{self.radius:.0f}m)", round_=True)
 
-#: 建筑（``House.kind``）的几种样式：民房 / 高楼 / 商场 / 便利店。
+
+#: 建筑（``House.kind``）的几种样式。
 HOUSE_COTTAGE = "cottage"
 HOUSE_TOWER = "tower"
 HOUSE_MALL = "mall"
 HOUSE_SHOP = "shop"
+HOUSE_SLAB = "slab"      # 长板楼（宽长、中高）
+HOUSE_BLOCK = "block"    # 矮胖公寓
+HOUSE_VILLA = "villa"    # 两层小别墅
 
 #: 建筑的显示名（HUD / 占地标签共用）。
 HOUSE_KIND_LABELS = {
@@ -355,14 +410,16 @@ HOUSE_KIND_LABELS = {
     HOUSE_TOWER: "高楼",
     HOUSE_MALL: "商场",
     HOUSE_SHOP: "便利店",
+    HOUSE_SLAB: "板楼",
+    HOUSE_BLOCK: "公寓",
+    HOUSE_VILLA: "别墅",
 }
 
 
 @dataclass(frozen=True)
 class House:
-    """一座建筑：按 ``kind`` 在民房 / 高楼 / 商场 / 便利店间切换。
+    """一座建筑：按 ``kind`` 切换外观。
 
-    民房带双坡屋顶，其余是平顶（高楼整面玻璃、商场整面橱窗、便利店带遮阳篷）。
     尺寸与朝向沿用同一套局部坐标：``+x`` 沿 ``heading``、门面开在 ``-z``。
     """
 
@@ -381,12 +438,73 @@ class House:
                          half_z=self.depth * 0.5, heading=self.heading,
                          label=f"{label}({self.width:.0f}×{self.depth:.0f}m)")
 
+    def street_lamp_world(self) -> tuple[float, float, float]:
+        """临街一侧的路灯世界坐标（灯头高度约 5 m）。"""
+        # 门面在局部 -z；灯柱挪到门前偏一侧
+        lx, lz = -self.width * 0.35, -(self.depth * 0.5 + 2.2)
+        c, s = math.cos(self.heading), math.sin(self.heading)
+        wx = self.x + lx * c - lz * s
+        wz = self.z + lx * s + lz * c
+        return (wx, style.GROUND_Y + style.SCENERY_LIFT + 5.0, wz)
 
-#: 树的几种样式（``Tree.kind``）：针叶松 / 阔叶树 / 白杨 / 棕榈。空串 = 按种子选。
+
+def random_village_house(x: float, z: float, rng: random.Random,
+                         heading: float | None = None) -> House:
+    """按概率抽一种民居/楼房，高矮长宽都带随机。"""
+    seed = rng.randrange(1 << 30)
+    hdg = heading if heading is not None else rng.uniform(0.0, math.tau)
+    roll = rng.random()
+    if roll < 0.38:
+        return House(
+            x=x, z=z, kind=HOUSE_COTTAGE, seed=seed, heading=hdg,
+            width=rng.uniform(6.5, 12.0), depth=rng.uniform(5.5, 9.0),
+            height=rng.uniform(3.6, 7.5),
+        )
+    if roll < 0.52:
+        return House(
+            x=x, z=z, kind=HOUSE_VILLA, seed=seed, heading=hdg,
+            width=rng.uniform(10.0, 16.0), depth=rng.uniform(8.0, 12.0),
+            height=rng.uniform(6.5, 9.5),
+        )
+    if roll < 0.68:
+        return House(
+            x=x, z=z, kind=HOUSE_BLOCK, seed=seed, heading=hdg,
+            width=rng.uniform(14.0, 22.0), depth=rng.uniform(11.0, 16.0),
+            height=rng.uniform(10.0, 18.0),
+        )
+    if roll < 0.82:
+        return House(
+            x=x, z=z, kind=HOUSE_SLAB, seed=seed, heading=hdg,
+            width=rng.uniform(22.0, 40.0), depth=rng.uniform(10.0, 14.0),
+            height=rng.uniform(16.0, 28.0),
+        )
+    if roll < 0.92:
+        return House(
+            x=x, z=z, kind=HOUSE_TOWER, seed=seed, heading=hdg,
+            width=rng.uniform(10.0, 18.0), depth=rng.uniform(10.0, 24.0),
+            height=rng.uniform(20.0, 48.0),
+        )
+    if roll < 0.97:
+        return House(
+            x=x, z=z, kind=HOUSE_SHOP, seed=seed, heading=hdg,
+            width=rng.uniform(5.5, 9.0), depth=rng.uniform(5.0, 7.5),
+            height=rng.uniform(3.0, 4.2),
+        )
+    return House(
+        x=x, z=z, kind=HOUSE_MALL, seed=seed, heading=hdg,
+        width=rng.uniform(24.0, 40.0), depth=rng.uniform(14.0, 22.0),
+        height=rng.uniform(7.0, 12.0),
+    )
+
+#: 树的几种样式（``Tree.kind``）。空串 = 按种子选针叶/阔叶。
 TREE_PINE = "pine"
 TREE_OAK = "oak"
 TREE_POPLAR = "poplar"
 TREE_PALM = "palm"
+TREE_SPRUCE = "spruce"     # 瘦高云杉
+TREE_WILLOW = "willow"     # 垂柳（宽冠低垂）
+TREE_BUSH = "bush"         # 灌木丛
+TREE_CYPRESS = "cypress"   # 柏树（细柱）
 
 #: 树的显示名。
 TREE_KIND_LABELS = {
@@ -394,12 +512,32 @@ TREE_KIND_LABELS = {
     TREE_OAK: "阔叶树",
     TREE_POPLAR: "白杨",
     TREE_PALM: "棕榈",
+    TREE_SPRUCE: "云杉",
+    TREE_WILLOW: "垂柳",
+    TREE_BUSH: "灌木",
+    TREE_CYPRESS: "柏树",
+}
+
+#: 绿地五档（布景模式），从小到大。
+MEADOW_SIZE_LABELS = {
+    "meadow_xs": "小草坪",
+    "meadow_s": "绿地",
+    "meadow_m": "草地",
+    "meadow_l": "草场",
+    "meadow_xl": "大草原",
+}
+MEADOW_SIZE_RADIUS = {
+    "meadow_xs": 7.0,
+    "meadow_s": 12.0,
+    "meadow_m": 20.0,
+    "meadow_l": 32.0,
+    "meadow_xl": 48.0,
 }
 
 
 @dataclass(frozen=True)
 class Tree:
-    """一棵树；``kind`` 决定树形（针叶 / 阔叶 / 白杨 / 棕榈），空串时按种子选。"""
+    """一棵树；``kind`` 决定树形，空串时按种子选针叶/阔叶。"""
 
     x: float
     z: float
@@ -410,7 +548,7 @@ class Tree:
 
     def footprint(self) -> Footprint:
         # 树冠会被风吹得比树干宽，但也不该夸张：按高度的 0.22 折成半径。
-        radius = self.height * 0.22
+        radius = self.height * (0.35 if self.kind == TREE_BUSH else 0.22)
         label = TREE_KIND_LABELS.get(self.kind, "树木")
         return Footprint(x=self.x, z=self.z, half_x=radius, half_z=radius,
                          label=f"{label}({self.height:.0f}m)", round_=True)
@@ -431,6 +569,13 @@ class Meadow:
     tone: int = 0
     tufts: int = 8
     sides: int = 11
+    #: 尺寸档 id（``meadow_xs``…）；空串则只按半径显示。
+    size: str = ""
+
+    def footprint(self) -> Footprint:
+        label = MEADOW_SIZE_LABELS.get(self.size, "绿地")
+        return Footprint(x=self.x, z=self.z, half_x=self.radius, half_z=self.radius,
+                         label=f"{label}(R{self.radius:.0f}m)", round_=True)
 
 
 @dataclass(frozen=True)
@@ -646,35 +791,78 @@ class Scenery:
 # --------------------------------------------------------------------------- #
 
 def _add_peak(builder: MeshBuilder, peak: Peak) -> None:
-    """一座山：一圈一圈往上收的环缝成锥，按高度分层上色。
+    """一座山：一圈一圈往上收的环缝成锥，按 ``kind`` 区分外形。
 
     每个环都是**等高的多边形**，所以山是"一层层台阶"上去的 —— 低模山该有的样子。
     顶点高度不逐点随机（那样会变成一圈尖刺），只让半径逐方位抖动、让每层的整体
-    高度微微起伏。
+    高度微微起伏。台地 / 火山在顶层改成平台或火山口，而不是尖顶。
     """
     sides = max(6, peak.sides)
     rings = max(2, peak.rings)
     rng = random.Random(peak.seed)
     base_y = style.GROUND_Y + style.SCENERY_LIFT
+    kind = peak.kind
 
-    wobble = [1.0 + peak.rough * (rng.random() * 2.0 - 1.0) for _ in range(sides)]
-    layer = [1.0 + peak.rough * 0.30 * (rng.random() * 2.0 - 1.0)
+    # 山梁：沿一个水平轴拉长；其余样式保持近圆。
+    stretch_x, stretch_z = 1.0, 1.0
+    if kind == PEAK_RIDGE:
+        if rng.random() < 0.5:
+            stretch_x, stretch_z = 1.55, 0.62
+        else:
+            stretch_x, stretch_z = 0.62, 1.55
+
+    # 径向 / 高度收束指数：峭壁更尖，草丘更钝，台地顶层几乎不收。
+    radius_pow = 0.88
+    height_pow = 1.30
+    top_open = 0.0          # >0 时最顶层保留开口（火山口）
+    flat_top = False        # 台地：顶层是水平多边形，不开尖
+    if kind == PEAK_HILL:
+        radius_pow, height_pow = 0.95, 1.05
+    elif kind == PEAK_CRAG:
+        radius_pow, height_pow = 0.70, 1.55
+    elif kind == PEAK_MESA:
+        radius_pow, height_pow = 0.55, 0.85
+        flat_top = True
+    elif kind == PEAK_VOLCANO:
+        radius_pow, height_pow = 0.92, 1.15
+        top_open = 0.18
+    elif kind == PEAK_RIDGE:
+        radius_pow, height_pow = 0.90, 1.10
+
+    rough = peak.rough
+    if kind == PEAK_CRAG:
+        rough = max(rough, 0.26)
+    elif kind == PEAK_MESA:
+        rough = min(rough, 0.08)
+
+    wobble = [1.0 + rough * (rng.random() * 2.0 - 1.0) for _ in range(sides)]
+    layer = [1.0 + rough * 0.30 * (rng.random() * 2.0 - 1.0)
              for _ in range(rings + 1)]
-    layer[0] = 1.0                     # 山顶不高不低，就是一个尖
+    layer[0] = 1.0
 
     def ring(k: int) -> list[tuple[float, float, float]]:
         t = k / rings
-        radius = peak.radius * (t ** 0.88)
-        height = peak.height * ((1.0 - t) ** 1.30) * layer[k]
+        # 火山口：最顶层 t 不收到 0，留一圈开口
+        t_eff = top_open + (1.0 - top_open) * t if top_open > 0.0 else t
+        if flat_top and k == 0:
+            t_eff = 0.42          # 台地顶面半径 ≈ 0.42 × 山脚
+        radius = peak.radius * (t_eff ** radius_pow)
+        height = peak.height * ((1.0 - t) ** height_pow) * layer[k]
+        if flat_top and k == 0:
+            height = peak.height * 0.92 * layer[0]
         return [
-            (peak.x + radius * wobble[i] * math.cos(math.tau * i / sides),
+            (peak.x + radius * stretch_x * wobble[i]
+             * math.cos(math.tau * i / sides),
              base_y + height,
-             peak.z + radius * wobble[i] * math.sin(math.tau * i / sides))
+             peak.z + radius * stretch_z * wobble[i]
+             * math.sin(math.tau * i / sides))
             for i in range(sides)
         ]
 
+    snow_cut = 0.55 if kind == PEAK_SNOW else 0.80
+
     def color_at(frac: float) -> Color:
-        if peak.snow and frac > 0.80:
+        if peak.snow and frac > snow_cut:
             return style.MOUNTAIN_SNOW_COLOR
         if peak.rocky and frac > 0.52:
             return style.MOUNTAIN_ROCK_HIGH_COLOR
@@ -684,18 +872,56 @@ def _add_peak(builder: MeshBuilder, peak: Peak) -> None:
             return style.MOUNTAIN_FOOT_COLOR
         return style.HILL_COLOR
 
-    apex = (peak.x, base_y + peak.height * layer[0], peak.z)
+    top = ring(0)
     lower = ring(1)
     upper_color = color_at(1.0 - 0.5 / rings)
-    for i in range(sides):
+    if flat_top:
+        # 台地顶面：整圈水平多边形
         builder.add_polygon(
-            (apex, lower[(i + 1) % sides], lower[i]),
-            _tinted(rng, upper_color),
+            [(p[0], p[1], p[2]) for p in top],
+            _tinted(rng, style.MESA_TOP_COLOR),
+            normal=(0.0, 1.0, 0.0),
         )
+        for i in range(sides):
+            j = (i + 1) % sides
+            builder.add_polygon(
+                (top[i], top[j], lower[j], lower[i]),
+                _tinted(rng, upper_color),
+            )
+    elif top_open > 0.0:
+        # 火山口：顶环内填深色熔岩盘，外圈连到下一层
+        crater_y = top[0][1] - peak.height * 0.06
+        crater = [
+            (peak.x + (p[0] - peak.x) * 0.55,
+             crater_y,
+             peak.z + (p[2] - peak.z) * 0.55)
+            for p in top
+        ]
+        builder.add_polygon(
+            [(p[0], p[1], p[2]) for p in crater],
+            _tinted(rng, style.VOLCANO_CRATER_COLOR),
+            normal=(0.0, 1.0, 0.0),
+        )
+        for i in range(sides):
+            j = (i + 1) % sides
+            builder.add_polygon(
+                (top[i], top[j], crater[j], crater[i]),
+                _tinted(rng, style.VOLCANO_CRATER_COLOR),
+            )
+            builder.add_polygon(
+                (top[i], top[j], lower[j], lower[i]),
+                _tinted(rng, upper_color),
+            )
+    else:
+        apex = (peak.x, base_y + peak.height * layer[0], peak.z)
+        for i in range(sides):
+            builder.add_polygon(
+                (apex, lower[(i + 1) % sides], lower[i]),
+                _tinted(rng, upper_color),
+            )
 
     for k in range(1, rings):
         low, high = ring(k + 1), ring(k)
-        # 这一圈台阶的"平均高度比例"，用来决定它是林地、岩石还是雪
         frac = 1.0 - (k + 0.5) / rings
         color = color_at(frac)
         for i in range(sides):
@@ -798,7 +1024,7 @@ def _add_meadow(builder: MeshBuilder, meadow: Meadow) -> None:
 
 
 def _add_tree(builder: MeshBuilder, tree: Tree) -> None:
-    """一棵树：按 ``kind`` 选树形（针叶三层锥 / 阔叶球冠 / 白杨细高 / 棕榈）。"""
+    """一棵树：按 ``kind`` 选树形。"""
     rng = random.Random(tree.seed)
     height = max(1.5, tree.height)
     base_y = style.GROUND_Y + style.SCENERY_LIFT
@@ -808,6 +1034,18 @@ def _add_tree(builder: MeshBuilder, tree: Tree) -> None:
         return
     if tree.kind == TREE_PALM:
         _add_tree_palm(builder, tree, rng, height, base_y)
+        return
+    if tree.kind == TREE_SPRUCE:
+        _add_tree_spruce(builder, tree, rng, height, base_y)
+        return
+    if tree.kind == TREE_WILLOW:
+        _add_tree_willow(builder, tree, rng, height, base_y)
+        return
+    if tree.kind == TREE_BUSH:
+        _add_tree_bush(builder, tree, rng, height, base_y)
+        return
+    if tree.kind == TREE_CYPRESS:
+        _add_tree_cypress(builder, tree, rng, height, base_y)
         return
 
     if tree.kind:
@@ -880,16 +1118,83 @@ def _add_tree_palm(builder: MeshBuilder, tree: Tree, rng: random.Random,
         )
 
 
+def _add_tree_spruce(builder: MeshBuilder, tree: Tree, rng: random.Random,
+                     height: float, base_y: float) -> None:
+    """云杉：比普通松更瘦高，四层尖锥。"""
+    leaf = _tinted(rng, style.TREE_LEAF_COLORS[0], 0.08)
+    trunk_height = height * 0.28
+    trunk_radius = max(0.06, height * 0.022)
+    builder.add_cylinder((tree.x, base_y, tree.z),
+                         (tree.x, base_y + trunk_height, tree.z),
+                         trunk_radius, 6, style.TREE_TRUNK_COLOR)
+    tiers = ((0.34, 0.36), (0.26, 0.32), (0.18, 0.28), (0.11, 0.22))
+    for index, (radius_f, span_f) in enumerate(tiers):
+        _add_cone(
+            builder,
+            (tree.x, base_y + trunk_height * 0.65 + index * height * 0.17, tree.z),
+            radius=height * radius_f, height=height * span_f, sides=7,
+            color=_tinted(rng, leaf, 0.05),
+        )
+
+
+def _add_tree_willow(builder: MeshBuilder, tree: Tree, rng: random.Random,
+                     height: float, base_y: float) -> None:
+    """垂柳：短干 + 偏宽偏低的球冠。"""
+    leaf = _tinted(rng, style.TREE_LEAF_COLORS[rng.randrange(
+        len(style.TREE_LEAF_COLORS))], 0.10)
+    trunk_height = height * 0.38
+    trunk_radius = max(0.08, height * 0.03)
+    builder.add_cylinder((tree.x, base_y, tree.z),
+                         (tree.x, base_y + trunk_height, tree.z),
+                         trunk_radius, 6, style.TREE_TRUNK_COLOR)
+    _add_ball(builder, (tree.x, base_y + trunk_height + height * 0.18, tree.z),
+              radius=height * 0.42, sides=8, rings=3, color=leaf, squash=0.72)
+
+
+def _add_tree_bush(builder: MeshBuilder, tree: Tree, rng: random.Random,
+                   height: float, base_y: float) -> None:
+    """灌木：几乎无树干，贴地两三个扁球。"""
+    leaf = _tinted(rng, style.TREE_LEAF_COLORS[rng.randrange(
+        len(style.TREE_LEAF_COLORS))], 0.12)
+    span = max(1.2, height)
+    for _ in range(3):
+        ox = (rng.random() - 0.5) * span * 0.45
+        oz = (rng.random() - 0.5) * span * 0.45
+        _add_ball(builder, (tree.x + ox, base_y + span * 0.28, tree.z + oz),
+                  radius=span * (0.28 + rng.random() * 0.12),
+                  sides=6, rings=2, color=_tinted(rng, leaf, 0.08), squash=0.70)
+
+
+def _add_tree_cypress(builder: MeshBuilder, tree: Tree, rng: random.Random,
+                      height: float, base_y: float) -> None:
+    """柏树：细柱树干 + 一根瘦长锥冠。"""
+    leaf = _tinted(rng, style.TREE_LEAF_COLORS[0], 0.06)
+    trunk_height = height * 0.22
+    trunk_radius = max(0.05, height * 0.018)
+    builder.add_cylinder((tree.x, base_y, tree.z),
+                         (tree.x, base_y + trunk_height, tree.z),
+                         trunk_radius, 6, style.TREE_TRUNK_COLOR)
+    _add_cone(builder, (tree.x, base_y + trunk_height * 0.7, tree.z),
+              radius=height * 0.11, height=height * 0.85, sides=8, color=leaf)
+
+
 def _add_house(builder: MeshBuilder, house: House) -> None:
-    """一座建筑：按 ``house.kind`` 分派到民房 / 高楼 / 商场 / 便利店。"""
+    """一座建筑：按 ``house.kind`` 分派；门前再立一盏路灯。"""
     if house.kind == HOUSE_TOWER:
         _add_house_tower(builder, house)
     elif house.kind == HOUSE_MALL:
         _add_house_mall(builder, house)
     elif house.kind == HOUSE_SHOP:
         _add_house_shop(builder, house)
+    elif house.kind == HOUSE_SLAB:
+        _add_house_slab(builder, house)
+    elif house.kind == HOUSE_BLOCK:
+        _add_house_block(builder, house)
+    elif house.kind == HOUSE_VILLA:
+        _add_house_villa(builder, house)
     else:
         _add_house_cottage(builder, house)
+    _add_street_lamp_mesh(builder, house)
 
 
 def _add_house_cottage(builder: MeshBuilder, house: House) -> None:
@@ -952,48 +1257,161 @@ def _add_house_cottage(builder: MeshBuilder, house: House) -> None:
                    style.HOUSE_ROOF_COLORS[1], top_color=style.HOUSE_ROOF_COLORS[1])
 
 
-def _add_house_tower(builder: MeshBuilder, house: House) -> None:
-    """高楼：细高的板楼 + 成排玻璃幕墙 + 楼顶一圈女儿墙。"""
-    wall = style.HOUSE_TOWER_WALL_COLOR
-    glass = style.HOUSE_TOWER_GLASS_COLOR
-    roof = style.HOUSE_TOWER_ROOF_COLOR
+def _add_house_glazing(builder: MeshBuilder, house: House, *,
+                       wall_color, glass_color, roof_color,
+                       floor_pitch: float = 3.2) -> None:
+    """共用：主体盒子 + 女儿墙 + 四面玻璃开间。"""
     base_y = style.GROUND_Y + style.SCENERY_LIFT
     half_w, half_d = house.width * 0.5, house.depth * 0.5
     top = base_y + house.height
     x, z, heading = house.x, house.z, house.heading
-
     _local_box(builder, x, z, heading, -half_w, half_w, base_y, top,
-               -half_d, half_d, wall, top_color=wall)
-
-    # 楼顶女儿墙 + 一个设备房
-    parapet = 0.6
-    _local_box(builder, x, z, heading, -half_w - 0.15, half_w + 0.15, top,
-               top + parapet, -half_d - 0.15, half_d + 0.15, roof, top_color=roof)
-    _local_box(builder, x, z, heading, -half_w * 0.3, half_w * 0.3, top,
-               top + 2.2, -half_d * 0.3, half_d * 0.3, roof, top_color=roof)
-
-    # 玻璃幕墙：沿高度分层、沿立面按开间铺；正面背面各一排，两端山墙各一排
-    floors = max(2, int(house.height // 3.2))
-    bays = max(1, int(house.width // 3.4))
+               -half_d, half_d, wall_color, top_color=wall_color)
+    parapet = 0.55
+    _local_box(builder, x, z, heading, -half_w - 0.12, half_w + 0.12, top,
+               top + parapet, -half_d - 0.12, half_d + 0.12,
+               roof_color, top_color=roof_color)
+    _local_box(builder, x, z, heading, -half_w * 0.28, half_w * 0.28, top,
+               top + 1.8, -half_d * 0.28, half_d * 0.28,
+               roof_color, top_color=roof_color)
+    floors = max(2, int(house.height // floor_pitch))
+    bays = max(1, int(house.width // 3.2))
     bay_step = house.width / max(1, bays)
+    depth_bays = max(1, int(house.depth // 3.2))
+    depth_step = house.depth / max(1, depth_bays)
+    win_half = min(1.05, bay_step * 0.38)
     for f in range(floors):
-        y0 = base_y + 0.9 + f * 3.2
-        y1 = y0 + 1.7
-        if y1 > top - 0.4:
+        y0 = base_y + 0.85 + f * floor_pitch
+        y1 = y0 + min(1.85, floor_pitch * 0.55)
+        if y1 > top - 0.35:
             break
         for k in range(bays):
             wx = -half_w + bay_step * (k + 0.5)
-            _local_box(builder, x, z, heading, wx - 0.9, wx + 0.9, y0, y1,
-                       -half_d - 0.02, -half_d + 0.07, glass, top_color=glass)
-            _local_box(builder, x, z, heading, wx - 0.9, wx + 0.9, y0, y1,
-                       half_d - 0.07, half_d + 0.02, glass, top_color=glass)
-        for k in range(max(1, int(house.depth // 3.4))):
-            dz_step = house.depth / max(1, int(house.depth // 3.4))
-            wz = -half_d + dz_step * (k + 0.5)
+            _local_box(builder, x, z, heading, wx - win_half, wx + win_half,
+                       y0, y1, -half_d - 0.02, -half_d + 0.07,
+                       glass_color, top_color=glass_color)
+            _local_box(builder, x, z, heading, wx - win_half, wx + win_half,
+                       y0, y1, half_d - 0.07, half_d + 0.02,
+                       glass_color, top_color=glass_color)
+        for k in range(depth_bays):
+            wz = -half_d + depth_step * (k + 0.5)
             _local_box(builder, x, z, heading, half_w - 0.07, half_w + 0.02,
-                       y0, y1, wz - 0.9, wz + 0.9, glass, top_color=glass)
+                       y0, y1, wz - win_half, wz + win_half,
+                       glass_color, top_color=glass_color)
             _local_box(builder, x, z, heading, -half_w - 0.02, -half_w + 0.07,
-                       y0, y1, wz - 0.9, wz + 0.9, glass, top_color=glass)
+                       y0, y1, wz - win_half, wz + win_half,
+                       glass_color, top_color=glass_color)
+
+
+def _add_house_tower(builder: MeshBuilder, house: House) -> None:
+    """高楼：玻璃幕墙塔楼（高矮胖瘦由 House 尺寸决定）。"""
+    _add_house_glazing(
+        builder, house,
+        wall_color=style.HOUSE_TOWER_WALL_COLOR,
+        glass_color=style.HOUSE_TOWER_GLASS_COLOR,
+        roof_color=style.HOUSE_TOWER_ROOF_COLOR,
+        floor_pitch=3.15,
+    )
+
+
+def _add_house_slab(builder: MeshBuilder, house: House) -> None:
+    """板楼：沿 width 拉得很长的住宅楼。"""
+    _add_house_glazing(
+        builder, house,
+        wall_color=style.HOUSE_SLAB_WALL_COLOR,
+        glass_color=style.HOUSE_SLAB_GLASS_COLOR,
+        roof_color=style.HOUSE_TOWER_ROOF_COLOR,
+        floor_pitch=3.0,
+    )
+
+
+def _add_house_block(builder: MeshBuilder, house: House) -> None:
+    """矮胖公寓：层高略矮、墙色带种子变化。"""
+    rng = random.Random(house.seed)
+    wall = style.HOUSE_BLOCK_WALL_COLORS[
+        rng.randrange(len(style.HOUSE_BLOCK_WALL_COLORS))]
+    _add_house_glazing(
+        builder, house,
+        wall_color=wall,
+        glass_color=style.HOUSE_TOWER_GLASS_COLOR,
+        roof_color=style.HOUSE_TOWER_ROOF_COLOR,
+        floor_pitch=2.85,
+    )
+
+
+def _add_house_villa(builder: MeshBuilder, house: House) -> None:
+    """两层别墅：浅色墙 + 双坡顶 + 门廊。"""
+    rng = random.Random(house.seed)
+    wall = style.HOUSE_VILLA_WALL_COLORS[
+        rng.randrange(len(style.HOUSE_VILLA_WALL_COLORS))]
+    roof = style.HOUSE_ROOF_COLORS[rng.randrange(len(style.HOUSE_ROOF_COLORS))]
+    base_y = style.GROUND_Y + style.SCENERY_LIFT
+    half_w, half_d = house.width * 0.5, house.depth * 0.5
+    top = base_y + house.height
+    x, z, heading = house.x, house.z, house.heading
+    _local_box(builder, x, z, heading, -half_w, half_w, base_y, top,
+               -half_d, half_d, wall, top_color=wall)
+    overhang = 0.45
+    roof_half_w, roof_half_d = half_w + overhang, half_d + overhang
+    ridge_h = min(2.6, house.depth * 0.40)
+    slope = math.hypot(roof_half_d, ridge_h)
+    normal_z = ridge_h / slope
+    normal_y = roof_half_d / slope
+    _local_quad(builder, x, z, heading,
+                ((-roof_half_w, top, -roof_half_d), (roof_half_w, top, -roof_half_d),
+                 (roof_half_w, top + ridge_h, 0.0), (-roof_half_w, top + ridge_h, 0.0)),
+                roof, normal_local=(0.0, normal_y, -normal_z))
+    _local_quad(builder, x, z, heading,
+                ((roof_half_w, top, roof_half_d), (-roof_half_w, top, roof_half_d),
+                 (-roof_half_w, top + ridge_h, 0.0), (roof_half_w, top + ridge_h, 0.0)),
+                roof, normal_local=(0.0, normal_y, normal_z))
+    for side in (-1.0, 1.0):
+        _local_polygon_wall_gable(builder, x, z, heading, side * half_w,
+                                  roof_half_d, top, ridge_h, wall)
+    # 门廊
+    _local_box(builder, x, z, heading, -1.4, 1.4, base_y, base_y + 2.4,
+               -half_d - 1.5, -half_d + 0.05, wall, top_color=wall)
+    _local_box(builder, x, z, heading, -1.6, 1.6, base_y + 2.35, base_y + 2.55,
+               -half_d - 1.7, -half_d + 0.2, roof, top_color=roof)
+    for row in range(2):
+        win_y0 = base_y + 1.2 + row * 2.8
+        win_y1 = win_y0 + 1.15
+        if win_y1 > top - 0.3:
+            break
+        for slot in (-1, 1):
+            slot_x = slot * half_w * 0.45
+            _local_box(builder, x, z, heading,
+                       slot_x - 0.75, slot_x + 0.75, win_y0, win_y1,
+                       -half_d - 0.02, -half_d + 0.08,
+                       style.HOUSE_WINDOW_COLOR, top_color=style.HOUSE_WINDOW_COLOR)
+
+
+def _add_street_lamp_mesh(builder: MeshBuilder, house: House) -> None:
+    """门前一盏路灯：灯柱 + 灯头 + 贴地光晕。"""
+    base_y = style.GROUND_Y + style.SCENERY_LIFT
+    half_w, half_d = house.width * 0.5, house.depth * 0.5
+    x, z, heading = house.x, house.z, house.heading
+    lamp_x = -half_w * 0.40
+    lamp_z = -(half_d + 2.2)
+    post_h = 5.0
+    builder.add_cylinder(
+        _local_to_world(x, z, heading, lamp_x, base_y, lamp_z),
+        _local_to_world(x, z, heading, lamp_x, base_y + post_h, lamp_z),
+        0.09, 6, style.LAMP_POST_COLOR)
+    _local_box(builder, x, z, heading,
+               lamp_x - 0.32, lamp_x + 0.32,
+               base_y + post_h - 0.22, base_y + post_h + 0.12,
+               lamp_z - 0.26, lamp_z + 0.26,
+               style.LAMP_HEAD_COLOR, top_color=style.LAMP_HEAD_COLOR)
+    # 贴地暖色光晕（半径约 3.5 m）
+    glow_r = 3.5
+    glow_y = base_y + 0.04
+    _local_quad(builder, x, z, heading,
+                ((lamp_x - glow_r, glow_y, lamp_z - glow_r),
+                 (lamp_x + glow_r, glow_y, lamp_z - glow_r),
+                 (lamp_x + glow_r, glow_y, lamp_z + glow_r),
+                 (lamp_x - glow_r, glow_y, lamp_z + glow_r)),
+                style.LAMP_GLOW_COLOR, normal_local=(0.0, 1.0, 0.0))
 
 
 def _add_house_mall(builder: MeshBuilder, house: House) -> None:
@@ -1276,7 +1694,8 @@ def build_scenery(scenery: Scenery, *, name: str = "scenery") -> NodePath:
     """把一份布景烘成**一个** :class:`NodePath`（一个 GeomNode = 一次绘制调用）。
 
     布景全是静态几何，逐件建节点只会白白多出几百次绘制调用；合成一个之后，四个
-    场景的布景加起来也只是一个节点。
+    场景的布景加起来也只是一个节点。灯柱几何也烘进去；真正的 ``PointLight`` 由
+    :func:`attach_street_lights` 另外挂（数量有上限）。
     """
     builder = MeshBuilder(name)
     for meadow in scenery.meadows:
@@ -1302,15 +1721,108 @@ def build_scenery(scenery: Scenery, *, name: str = "scenery") -> NodePath:
         _add_platform(builder, platform)
     node = builder.build()
     node.setName(name)
+    node.setPythonTag("street_lamp_positions",
+                      [house.street_lamp_world() for house in scenery.houses])
     return node
+
+
+def detach_street_lights(root: NodePath) -> None:
+    """拆掉旧路灯架，并清掉 ``root`` 上对它们的 ``setLight`` 引用。
+
+    只 ``removeNode`` 不够：Panda3D 的 LightAttrib 还挂在 ``root`` 上，
+    每重建一次布景就会再叠一层环境光 / 点光，房子越多画面越爆亮。
+    """
+    existing = root.find("street_lights")
+    if existing.isEmpty():
+        return
+    for child in existing.getChildren():
+        root.clearLight(child)
+    existing.removeNode()
+
+
+def _stable_lamp_key(pos: tuple[float, float, float]) -> int:
+    """按世界坐标算一个稳定优先级：增减房屋时，已点亮的灯尽量不动。"""
+    x, _y, z = pos
+    qx = int(round(x * 4.0))
+    qz = int(round(z * 4.0))
+    # 简单混合：与房屋增减顺序无关，只跟落点有关
+    return (qx * 73856093) ^ (qz * 19349663) ^ ((qx + qz) * 83492791)
+
+
+def pick_street_lamp_positions(
+        positions: list[tuple[float, float, float]],
+        max_lights: int | None = _MAX_STREET_LIGHTS,
+) -> list[tuple[float, float, float]]:
+    """选出要挂 ``PointLight`` 的灯位。
+
+    默认（``max_lights is None``）**全部点亮**。若显式封顶，按落点哈希取前 N，
+    增减房屋时尽量稳住已入选的灯位（供性能测试 / 旧行为对照）。
+    """
+    if not positions:
+        return []
+    if max_lights is None:
+        return list(positions)
+    if max_lights <= 0:
+        return []
+    if len(positions) <= max_lights:
+        return list(positions)
+    ranked = sorted(
+        positions,
+        key=lambda p: (_stable_lamp_key(p), round(p[0], 3), round(p[2], 3)),
+    )
+    return ranked[:max_lights]
+
+
+def attach_street_lights(root: NodePath, scenery: Scenery | None = None,
+                         *, max_lights: int | None = _MAX_STREET_LIGHTS,
+                         enabled: bool = True) -> NodePath | None:
+    """在 ``root`` 下挂暖色路灯 ``PointLight`` + 一点环境光。
+
+    默认每栋建筑门前一盏都点亮。``scenery`` 有就按房屋门前取样；否则读节点上
+    ``street_lamp_positions`` 标签。``enabled=False`` 时只拆灯、不挂新的
+    （总开关关掉）。可反复调用：旧灯会先拆干净再挂新的。
+    """
+    detach_street_lights(root)
+    if not enabled:
+        return None
+    holder = root.attachNewNode("street_lights")
+
+    ambient = AmbientLight("scenery_ambient")
+    ambient.setColor(Vec4(0.28, 0.29, 0.32, 1.0))
+    ambient_np = holder.attachNewNode(ambient)
+    root.setLight(ambient_np)
+
+    positions: list[tuple[float, float, float]]
+    if scenery is not None and scenery.houses:
+        positions = [h.street_lamp_world() for h in scenery.houses]
+    else:
+        tagged = root.find("**/scenery").getPythonTag("street_lamp_positions") \
+            if not root.find("**/scenery").isEmpty() else None
+        if tagged is None:
+            tagged = root.getPythonTag("street_lamp_positions")
+        positions = list(tagged or ())
+
+    positions = pick_street_lamp_positions(positions, max_lights)
+
+    for index, (px, py, pz) in enumerate(positions):
+        lamp = PointLight(f"street_lamp_{index}")
+        lamp.setColor(Vec4(1.00, 0.92, 0.75, 1.0))
+        # 常数 + 二次衰减：近处亮、十几米外就弱
+        lamp.setAttenuation((1.0, 0.0, 0.009))
+        if hasattr(lamp, "setMaxDistance"):
+            lamp.setMaxDistance(34.0)
+        np = holder.attachNewNode(lamp)
+        np.setPos(px, py, pz)
+        root.setLight(np)
+    return holder
 
 
 # --------------------------------------------------------------------------- #
 # 手工摆放布景的序列化（存档里记「用户自己摆的那几件」）
 # --------------------------------------------------------------------------- #
 # 程序化场景的布景按预设 key 重算（见 scenes/__init__.py），用户手工加的几件则
-# 需要逐件记下来。这里只序列化**可手工摆放**的那几类（房 / 车站 / 山 / 树），
-# 水面、草地、站台这类纯程序化产物不在其列。
+# 需要逐件记下来。这里序列化**可手工摆放**的类别（房 / 车站 / 山 / 树 / 湖 / 绿地）。
+# 河流、独立站台仍只由预设生成。
 
 #: 可手工摆放的布景类别 → 对应 ``Scenery`` 字段名。
 _PLACEABLE_FIELDS = {
@@ -1318,6 +1830,8 @@ _PLACEABLE_FIELDS = {
     "stations": Station,
     "peaks": Peak,
     "trees": Tree,
+    "lakes": Lake,
+    "meadows": Meadow,
 }
 
 #: ``Scenery`` 的全部字段名（整份拷贝 / 删一件时都要照它列一遍）。
@@ -1341,6 +1855,28 @@ def without_item(scenery: Scenery, key: str, index: int) -> Scenery:
     items.pop(index)
     data[key] = tuple(items)
     return Scenery(**data)
+
+
+def replace_placeables(scenery: Scenery, placeables: Scenery) -> Scenery:
+    """保留河流 / 独立站台，换掉全部可手工摆放字段。"""
+    data = {field: tuple(getattr(scenery, field)) for field in ALL_SCENERY_FIELDS}
+    for key in _PLACEABLE_FIELDS:
+        data[key] = tuple(getattr(placeables, key))
+    return Scenery(**data)
+
+
+def apply_placeables_dict(scenery: Scenery, data: dict | None) -> Scenery:
+    """用字典里**出现过的**可摆放字段盖回去；缺省字段保持原样。
+
+    旧存档没有 ``lakes`` / ``meadows`` 键时，不能把预设里的湖草清成空。
+    """
+    data = data or {}
+    result = {field: tuple(getattr(scenery, field)) for field in ALL_SCENERY_FIELDS}
+    for key, cls in _PLACEABLE_FIELDS.items():
+        if key not in data:
+            continue
+        result[key] = tuple(cls(**record) for record in data[key])
+    return Scenery(**result)
 
 
 def scenery_to_dict(scenery: Scenery) -> dict:

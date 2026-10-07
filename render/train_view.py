@@ -83,7 +83,7 @@ class TrainView:
 
     def __init__(self, spec: TrainSpec, parent: NodePath, *,
                  details: bool = True, train: Train | None = None,
-                 name: str | None = None):
+                 name: str | None = None, on_progress=None):
         self.spec = spec
         self.details = details
         self.train = train if train is not None else Train(spec)
@@ -106,7 +106,7 @@ class TrainView:
 
         self._facings = spec.car_facings()
         self._light_holder = None
-        self._build_cars()
+        self._build_cars(on_progress=on_progress)
 
     # ==================================================================== #
     # 构建
@@ -124,9 +124,13 @@ class TrainView:
             self._templates[key] = template
         return template
 
-    def _build_cars(self) -> None:
-        gltf_cars = gltf_train.cars_for(self.spec)
+    def _build_cars(self, on_progress=None) -> None:
+        if on_progress is not None:
+            on_progress("准备车体…", 0.12)
+        gltf_cars = gltf_train.cars_for(self.spec, on_progress=on_progress)
         if gltf_cars is not None:
+            if on_progress is not None:
+                on_progress("挂到场景…", 0.97)
             self._light_holder = gltf_train.light_train(self.root)
             for index, (car, template) in enumerate(zip(self.spec.cars, gltf_cars)):
                 node = template.copyTo(self.root)
@@ -136,6 +140,8 @@ class TrainView:
                 if key not in self._template_triangles:
                     self._template_triangles[key] = gltf_train.triangle_count(template)
             return
+        if on_progress is not None:
+            on_progress("生成程序化车体…", 0.5)
         for index, (car, flipped) in enumerate(zip(self.spec.cars, self._facings)):
             node = self._template(car, flipped).copyTo(self.root)
             node.setName(f"car_{index}_{car.id}")

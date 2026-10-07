@@ -80,7 +80,7 @@ _PROMPT_ECHO_MAX = 22
 #: 同一只手不可能既放轨道又转视角。加载列车时自动切到视角模式，用户再用 V 切回来。
 MODE_BUILD = "build"
 MODE_VIEW = "view"
-#: 第三种鼠标模式：**布景**。左键在空地上放下房屋 / 车站 / 大山 / 树，
+#: 第三种鼠标模式：**布景**。左键在空地上放下房屋 / 车站 / 山 / 树 / 湖 / 绿地，
 #: 按 B 进出。与「放置轨道」「视角」并列 —— 布景不参与走线，所以它不能复用
 #: 轨道那套「吸附到端口」的逻辑，而是直接把物件摆到鼠标指着的地面上。
 MODE_SCENERY = "scenery"
@@ -89,9 +89,13 @@ MODE_SCENERY = "scenery"
 #: 两者共用同一个输入框，只是回车之后的动作不同（见 :meth:`TrackEditor._confirm_file_prompt`）。
 PROMPT_SAVE = "save"
 PROMPT_LOAD = "load"
+#: 读档前若当前场景有未保存改动：先问要不要保存（Y / N / Esc）。
+PROMPT_LOAD_CONFIRM = "load_confirm"
 
 #: 布景模式里的分类（按 ``,`` / ``.`` 切换）。
-SCENERY_CATEGORIES = ("building", "station", "mountain", "tree")
+SCENERY_CATEGORIES = (
+    "building", "station", "mountain", "tree", "lake", "meadow",
+)
 
 #: 每个布景分类的显示名（HUD 的"分类菜单"共用）。
 SCENERY_CATEGORY_LABELS = {
@@ -99,12 +103,17 @@ SCENERY_CATEGORY_LABELS = {
     "station": "车站",
     "mountain": "山",
     "tree": "树木",
+    "lake": "湖泊",
+    "meadow": "绿地",
 }
 
 #: 每类里可摆放的物件：``id → 显示名``（按 ``[`` / ``]`` 循环、``1``–``9`` 直选）。
 SCENERY_ITEMS = {
     "building": (
         ("cottage", "普通民房"),
+        ("villa", "别墅"),
+        ("block", "公寓"),
+        ("slab", "板楼"),
         ("tower", "高楼"),
         ("mall", "商场"),
         ("shop", "便利店"),
@@ -116,12 +125,35 @@ SCENERY_ITEMS = {
     "mountain": (
         ("mountain", "大山"),
         ("hill", "山丘"),
+        ("ridge", "山梁"),
+        ("crag", "岩峰"),
+        ("snow", "雪山"),
+        ("mesa", "台地"),
+        ("volcano", "火山"),
     ),
     "tree": (
         ("pine", "针叶松"),
         ("oak", "阔叶树"),
         ("poplar", "白杨"),
         ("palm", "棕榈"),
+        ("spruce", "云杉"),
+        ("willow", "垂柳"),
+        ("bush", "灌木"),
+        ("cypress", "柏树"),
+    ),
+    "lake": (
+        ("pond", "小水塘"),
+        ("lake_s", "小湖"),
+        ("lake_m", "中湖"),
+        ("lake_l", "大湖"),
+        ("lake_xl", "巨型湖"),
+    ),
+    "meadow": (
+        ("meadow_xs", "小草坪"),
+        ("meadow_s", "绿地"),
+        ("meadow_m", "草地"),
+        ("meadow_l", "草场"),
+        ("meadow_xl", "大草原"),
     ),
 }
 
@@ -130,10 +162,17 @@ SCENERY_PICK_RADIUS = 14.0
 
 #: 布景物件 id → 它在 ``Scenery`` 里存进哪个字段。
 _SCENERY_KIND_FIELD = {
-    "cottage": "houses", "tower": "houses", "mall": "houses", "shop": "houses",
+    "cottage": "houses", "villa": "houses", "block": "houses",
+    "slab": "houses", "tower": "houses", "mall": "houses", "shop": "houses",
     "classical": "stations", "modern": "stations",
-    "mountain": "peaks", "hill": "peaks",
+    "mountain": "peaks", "hill": "peaks", "ridge": "peaks", "crag": "peaks",
+    "snow": "peaks", "mesa": "peaks", "volcano": "peaks",
     "pine": "trees", "oak": "trees", "poplar": "trees", "palm": "trees",
+    "spruce": "trees", "willow": "trees", "bush": "trees", "cypress": "trees",
+    "pond": "lakes", "lake_s": "lakes", "lake_m": "lakes",
+    "lake_l": "lakes", "lake_xl": "lakes",
+    "meadow_xs": "meadows", "meadow_s": "meadows", "meadow_m": "meadows",
+    "meadow_l": "meadows", "meadow_xl": "meadows",
 }
 #: 屏幕投影时"点在镜头前方"的最小深度（米）。比它更近就当在相机背后 / 贴着镜头。
 _MIN_CAMERA_DEPTH = 1e-4
@@ -166,15 +205,9 @@ DRIVE_BOOST = 1.8
 #: ``tests/test_app_hud.py`` 的 ``_WORST_CASE`` 直接引用它，于是往这里加一行、
 #: 加了之后超出面板能容纳的高度，测试会当场发现（而不是等用户看到字压在一起）。
 HELP_TEXT = (
-    "V 放置/视角切换  左键 放轨或拖视角  右键 环绕  中键 平移  滚轮 缩放\n"
-    "R 旋转  T 换接驳端口  C 一键闭合  U 扳道岔  X 只删鼠标下这一节\n"
-    ", . 换分类（直轨/曲线/坡道/高架桥/交叉/道岔）  [ ] 换同类里下一件\n"
-    "1-9 直选第 n 件  退格 撤销  Ctrl+S 另存  Ctrl+O 读档（都可填名字）\n"
-    "W A S D 平移视角  Q E 转向  F 取景\n"
-    "B 布景模式（, . 换分类  [ ] 换件  1-9 直选  左键放  X 删  R 转）\n"
-    "N 召唤列车（自动切到视角）  M 收起  ↑ 牵引  ↓ 制动  空格 惰行\n"
-    "K 换向（先急刹再反向加速）  J 鸣笛  Shift+空格 急停\n"
-    "拼环：按 . 到「曲线」挑弧度，几节后按 C 补完"
+    "V 放置/视角　B 布景　H 信息栏　左键 操作　右键 环绕　滚轮 缩放\n"
+    "R 旋转　C 闭合　X 删除　, . 分类　[ ] 换件　1-9 直选　退格 撤销\n"
+    "N 上列车　↑↓ 手柄　空格 惰行　K 换向　J 鸣笛　Ctrl+S / O 存读档"
 )
 
 
@@ -285,7 +318,7 @@ class TrackEditor:
         self._left_orbiting = False
 
         # ---- 布景（见 MODE_SCENERY）：程序化底座 + 用户手工摆的几件
-        #: 底座布景（场景预设 / 存档里记的预设重算出来的那部分），不可编辑。
+        #: 底座布景（场景预设 / 存档里记的预设）；房 / 车站 / 山 / 树可在布景模式删。
         self.base_scenery: scenery_mod.Scenery = (
             scenery if scenery is not None else scenery_mod.Scenery())
         #: 用户手工摆放的布景（房 / 车站 / 大山 / 树），可增删、随存档一起保存。
@@ -296,18 +329,27 @@ class TrackEditor:
         self._scenery_category_index = 0
         self._scenery_kind_index = 0
         self._scenery_heading = 0.0
-        #: 鼠标正悬停在哪件**手工布景**上（``(类别字段, 该类别内下标)``）。
-        self.hover_scenery: tuple[str, int] | None = None
+        #: 鼠标正悬停的布景：``("base"|"user", 类别字段, 该类别内下标)``。
+        self.hover_scenery: tuple[str, str, int] | None = None
+        #: 底座可摆放件是否被删改过（为真才把 ``base_scenery`` 写进存档）。
+        self._base_scenery_edited = False
         #: 幽灵预览（布景模式）：临时一个节点，``_scenery_ghost_key`` 变了才重建。
         self._scenery_ghost_root = base.render.attachNewNode("scenery_ghost")
         self._scenery_ghost = None
         self._scenery_ghost_key: tuple | None = None
         #: 悬停高亮：一件半透明的占地轮廓（房 / 车站是矩形，山 / 树是圆）。
         self._scenery_highlight = base.render.attachNewNode("scenery_highlight")
+        #: 路灯总开关（与 HUD「路灯开/关」同步）；关时不挂 PointLight。
+        self.street_lights_enabled = True
+        if self.hud is not None and hasattr(self.hud, "on_toggle_street_lights"):
+            self.hud.street_lights_on = True
+            self.hud.on_toggle_street_lights = self.set_street_lights_enabled
         self._rebuild_scenery()
 
         #: 列车音效（引擎随车速变速 + 风笛）。null 音频下自动退化为空壳。
         self.audio = TrainAudio(base)
+        #: 上次保存 / 读档后的状态指纹；与当前不一致 = 有未保存改动。
+        self._clean_fingerprint = self._state_fingerprint()
 
     # ==================================================================== #
     # 当前选中的件
@@ -562,21 +604,42 @@ class TrackEditor:
     def _make_scenery_item(self, kind: str, x: float, z: float, heading: float):
         """按物件类型 + 落点造一件布景数据（尺寸取沙盘里合眼的默认值）。"""
         seed = random.randrange(1 << 30)
+        rng = random.Random(seed)
         if kind == "cottage":
-            return scenery_mod.House(x=x, z=z, width=9.0, depth=7.0, height=4.6,
-                                     heading=heading, seed=seed)
+            return scenery_mod.House(
+                x=x, z=z, kind=scenery_mod.HOUSE_COTTAGE, heading=heading, seed=seed,
+                width=rng.uniform(6.5, 12.0), depth=rng.uniform(5.5, 9.0),
+                height=rng.uniform(3.8, 7.2))
+        if kind == "villa":
+            return scenery_mod.House(
+                x=x, z=z, kind=scenery_mod.HOUSE_VILLA, heading=heading, seed=seed,
+                width=rng.uniform(10.0, 16.0), depth=rng.uniform(8.0, 12.0),
+                height=rng.uniform(6.5, 9.5))
+        if kind == "block":
+            return scenery_mod.House(
+                x=x, z=z, kind=scenery_mod.HOUSE_BLOCK, heading=heading, seed=seed,
+                width=rng.uniform(14.0, 22.0), depth=rng.uniform(11.0, 16.0),
+                height=rng.uniform(10.0, 18.0))
+        if kind == "slab":
+            return scenery_mod.House(
+                x=x, z=z, kind=scenery_mod.HOUSE_SLAB, heading=heading, seed=seed,
+                width=rng.uniform(22.0, 40.0), depth=rng.uniform(10.0, 14.0),
+                height=rng.uniform(16.0, 28.0))
         if kind == "tower":
             return scenery_mod.House(
-                x=x, z=z, kind=scenery_mod.HOUSE_TOWER,
-                width=13.0, depth=13.0, height=26.0, heading=heading, seed=seed)
+                x=x, z=z, kind=scenery_mod.HOUSE_TOWER, heading=heading, seed=seed,
+                width=rng.uniform(10.0, 18.0), depth=rng.uniform(10.0, 24.0),
+                height=rng.uniform(20.0, 48.0))
         if kind == "mall":
             return scenery_mod.House(
-                x=x, z=z, kind=scenery_mod.HOUSE_MALL,
-                width=30.0, depth=18.0, height=8.5, heading=heading, seed=seed)
+                x=x, z=z, kind=scenery_mod.HOUSE_MALL, heading=heading, seed=seed,
+                width=rng.uniform(24.0, 40.0), depth=rng.uniform(14.0, 22.0),
+                height=rng.uniform(7.0, 12.0))
         if kind == "shop":
             return scenery_mod.House(
-                x=x, z=z, kind=scenery_mod.HOUSE_SHOP,
-                width=7.0, depth=6.0, height=3.4, heading=heading, seed=seed)
+                x=x, z=z, kind=scenery_mod.HOUSE_SHOP, heading=heading, seed=seed,
+                width=rng.uniform(5.5, 9.0), depth=rng.uniform(5.0, 7.5),
+                height=rng.uniform(3.0, 4.2))
         if kind == "classical":
             return scenery_mod.Station(
                 x=x, z=z, style=scenery_mod.STATION_CLASSICAL,
@@ -587,24 +650,68 @@ class TrackEditor:
                 x=x, z=z, style=scenery_mod.STATION_MODERN,
                 width=26.0, depth=12.0, height=6.0, heading=heading, seed=seed,
                 with_platform=True)
-        if kind == "mountain":
-            return scenery_mod.Peak(x=x, z=z, radius=40.0, height=30.0, seed=seed)
-        if kind == "hill":
-            return scenery_mod.Peak.hill(x=x, z=z, radius=26.0, height=10.0,
-                                         seed=seed)
-        if kind == "pine":
-            return scenery_mod.Tree(x=x, z=z, kind=scenery_mod.TREE_PINE,
-                                    height=11.0, seed=seed)
-        if kind == "oak":
-            return scenery_mod.Tree(x=x, z=z, kind=scenery_mod.TREE_OAK,
-                                    height=9.0, seed=seed)
-        if kind == "poplar":
-            return scenery_mod.Tree(x=x, z=z, kind=scenery_mod.TREE_POPLAR,
-                                    height=15.0, seed=seed)
-        if kind == "palm":
-            return scenery_mod.Tree(x=x, z=z, kind=scenery_mod.TREE_PALM,
-                                    height=8.0, seed=seed)
+        peak_specs = {
+            "mountain": dict(kind=scenery_mod.PEAK_MOUNTAIN, radius=42.0,
+                             height=32.0, rough=0.20, rocky=True, snow=True),
+            "hill": dict(kind=scenery_mod.PEAK_HILL, radius=26.0, height=10.0,
+                         rough=0.14, rocky=False, snow=False, rings=3, sides=12),
+            "ridge": dict(kind=scenery_mod.PEAK_RIDGE, radius=48.0, height=14.0,
+                          rough=0.18, rocky=False, snow=False, rings=4),
+            "crag": dict(kind=scenery_mod.PEAK_CRAG, radius=16.0, height=28.0,
+                         rough=0.28, rocky=True, snow=False, sides=10),
+            "snow": dict(kind=scenery_mod.PEAK_SNOW, radius=36.0, height=40.0,
+                         rough=0.22, rocky=True, snow=True),
+            "mesa": dict(kind=scenery_mod.PEAK_MESA, radius=34.0, height=12.0,
+                         rough=0.06, rocky=True, snow=False, rings=3),
+            "volcano": dict(kind=scenery_mod.PEAK_VOLCANO, radius=30.0,
+                            height=26.0, rough=0.16, rocky=True, snow=False),
+        }
+        if kind in peak_specs:
+            return scenery_mod.Peak(x=x, z=z, seed=seed, **peak_specs[kind])
+
+        tree_specs = {
+            "pine": (scenery_mod.TREE_PINE, 11.0),
+            "oak": (scenery_mod.TREE_OAK, 9.0),
+            "poplar": (scenery_mod.TREE_POPLAR, 15.0),
+            "palm": (scenery_mod.TREE_PALM, 8.0),
+            "spruce": (scenery_mod.TREE_SPRUCE, 14.0),
+            "willow": (scenery_mod.TREE_WILLOW, 10.0),
+            "bush": (scenery_mod.TREE_BUSH, 3.2),
+            "cypress": (scenery_mod.TREE_CYPRESS, 12.0),
+        }
+        if kind in tree_specs:
+            tree_kind, height = tree_specs[kind]
+            return scenery_mod.Tree(x=x, z=z, kind=tree_kind, height=height,
+                                    seed=seed)
+
+        if kind in scenery_mod.LAKE_SIZE_RADIUS:
+            radius = scenery_mod.LAKE_SIZE_RADIUS[kind]
+            beach = max(2.5, radius * 0.14)
+            return scenery_mod.Lake(
+                x=x, z=z, radius=radius, beach=beach, seed=seed, size=kind)
+
+        if kind in scenery_mod.MEADOW_SIZE_RADIUS:
+            radius = scenery_mod.MEADOW_SIZE_RADIUS[kind]
+            tone = {"meadow_xs": 0, "meadow_s": 1, "meadow_m": 2,
+                    "meadow_l": 0, "meadow_xl": 3}.get(kind, 0)
+            tufts = max(4, int(radius * 0.45))
+            return scenery_mod.Meadow(
+                x=x, z=z, radius=radius, seed=seed, tone=tone, tufts=tufts,
+                size=kind)
+
         raise ValueError(f"未知的布景物件 {kind!r}")
+
+    def set_street_lights_enabled(self, enabled: bool) -> None:
+        """路灯总开关：只改点光，不重烘整份布景网格。"""
+        self.street_lights_enabled = bool(enabled)
+        if self.hud is not None and hasattr(self.hud, "street_lights_on"):
+            self.hud.street_lights_on = self.street_lights_enabled
+            if hasattr(self.hud, "_place_chrome"):
+                self.hud._place_chrome()
+        combined = self.base_scenery.merged(self.user_scenery)
+        scenery_mod.attach_street_lights(
+            self.base.render, combined, enabled=self.street_lights_enabled)
+        self.notify("路灯：开" if self.street_lights_enabled else "路灯：关")
 
     def _rebuild_scenery(self) -> None:
         """把「底座 + 手工」并成一份，烘成一个节点挂到场景上。"""
@@ -613,6 +720,9 @@ class TrackEditor:
         combined = self.base_scenery.merged(self.user_scenery)
         self.scenery_node = scenery_mod.build_scenery(combined, name="scenery")
         self.scenery_node.reparentTo(self.base.render)
+        # attach_street_lights 自己会清掉旧灯的 setLight 引用，勿只 removeNode
+        scenery_mod.attach_street_lights(
+            self.base.render, combined, enabled=self.street_lights_enabled)
 
     def compute_scenery_placement(self):
         """布景模式下，待放物件落在鼠标指着的哪个地面点。"""
@@ -645,31 +755,49 @@ class TrackEditor:
         return (field, len(items) - 1)
 
     def delete_scenery_under_cursor(self) -> None:
-        """删掉鼠标正悬停的那件手工布景。"""
+        """删掉鼠标正悬停的那件布景（底座或手工件均可）。"""
         if self.hover_scenery is None:
             self.notify("把鼠标移到要删除的布景上")
             return
-        field, index = self.hover_scenery
+        layer, field, index = self.hover_scenery
         self.push_undo()
-        self.user_scenery = scenery_mod.without_item(
-            self.user_scenery, field, index)
+        if layer == "base":
+            self.base_scenery = scenery_mod.without_item(
+                self.base_scenery, field, index)
+            self._base_scenery_edited = True
+        else:
+            self.user_scenery = scenery_mod.without_item(
+                self.user_scenery, field, index)
         self.hover_scenery = None
         self._clear_scenery_highlight()
         self._rebuild_scenery()
         self.notify("已删除那件布景")
 
-    def _pick_scenery(self) -> tuple[str, int] | None:
-        """鼠标指着的那件手工布景（按占地轮廓的最近距离）。"""
+    def _pick_scenery(self) -> tuple[str, str, int] | None:
+        """鼠标指着的那件可删布景（底座 + 手工；同距时优先手工件）。"""
         ground = self.mouse_ground()
         if ground is None:
             return None
         mx, mz = ground[0], ground[2]
-        best, best_distance = None, SCENERY_PICK_RADIUS
-        for field, index, item in scenery_mod.placeable_items(self.user_scenery):
-            distance = item.footprint().distance_to(mx, mz)
-            if distance < best_distance:
-                best, best_distance = (field, index), distance
+        best: tuple[str, str, int] | None = None
+        best_distance = SCENERY_PICK_RADIUS
+        # 先扫底座、再扫手工：后面的同距会覆盖，手工优先
+        for layer, bag in (("base", self.base_scenery),
+                           ("user", self.user_scenery)):
+            for field, index, item in scenery_mod.placeable_items(bag):
+                distance = item.footprint().distance_to(mx, mz)
+                if distance < best_distance or (
+                        distance == best_distance and layer == "user"):
+                    best, best_distance = (layer, field, index), distance
         return best
+
+    def _scenery_at(self, layer: str, field: str, index: int):
+        """取悬停三元组对应的那一件；越界返回 ``None``。"""
+        bag = self.base_scenery if layer == "base" else self.user_scenery
+        items = getattr(bag, field)
+        if 0 <= index < len(items):
+            return items[index]
+        return None
 
     def _refresh_scenery_ghost(self) -> None:
         """布景模式的幽灵预览：在落点烘一件半透明的物件。"""
@@ -704,11 +832,10 @@ class TrackEditor:
         self._clear_scenery_highlight()
         if self.hover_scenery is None or not self.placing_scenery:
             return
-        field, index = self.hover_scenery
-        items = getattr(self.user_scenery, field)
-        if not (0 <= index < len(items)):
+        item = self._scenery_at(*self.hover_scenery)
+        if item is None:
             return
-        marker = build_footprint_marker(items[index].footprint())
+        marker = build_footprint_marker(item.footprint())
         marker.reparentTo(self._scenery_highlight)
 
     def _clear_scenery_highlight(self) -> None:
@@ -723,12 +850,18 @@ class TrackEditor:
         return self.base.mouseWatcherNode is not None \
             and self.base.mouseWatcherNode.hasMouse()
 
-    def _mouse(self) -> tuple[float, float]:
+    def _mouse(self) -> tuple[float, float] | None:
+        """当前鼠标 NDC；窗口未捕获指针时返回 ``None``（别直接 ``getMouse``）。"""
+        if not self._has_mouse():
+            return None
         pointer = self.base.mouseWatcherNode.getMouse()
         return (pointer.x, pointer.y)
 
-    def _mouse_pixels(self) -> tuple[float, float]:
-        x, y = self._mouse()
+    def _mouse_pixels(self) -> tuple[float, float] | None:
+        mouse = self._mouse()
+        if mouse is None:
+            return None
+        x, y = mouse
         return (x * self.base.win.getXSize() * 0.5,
                 y * self.base.win.getYSize() * 0.5)
 
@@ -777,7 +910,10 @@ class TrackEditor:
         if not self._has_mouse() and (x is None or y is None):
             return (None, None)
         if x is None or y is None:
-            x, y = self._mouse()
+            mouse = self._mouse()
+            if mouse is None:
+                return (None, None)
+            x, y = mouse
 
         ray = CollisionRay()
         try:
@@ -797,9 +933,10 @@ class TrackEditor:
 
     def pick_port(self) -> PortKey | None:
         """屏幕上离鼠标最近的空闲端口（在吸附半径内）。"""
-        if not self._has_mouse():
+        pixels = self._mouse_pixels()
+        if pixels is None:
             return None
-        mx, my = self._mouse_pixels()
+        mx, my = pixels
         best, best_distance = None, PORT_PICK_RADIUS_PX
         for key in self.layout.free_ports():
             world = self.layout.world_port(*key)
@@ -819,9 +956,10 @@ class TrackEditor:
         鼠标放在它的端部；反过来 20 m 直轨的中段若没有 route 中点当抓手，就会变成
         指上去没反应的死区。细节见 :meth:`PieceDef.route_midpoint_local`。
         """
-        if not self._has_mouse():
+        pixels = self._mouse_pixels()
+        if pixels is None:
             return None
-        mx, my = self._mouse_pixels()
+        mx, my = pixels
         best, best_distance = None, PIECE_PICK_RADIUS_PX
         for index, placed in self.layout.pieces.items():
             for local in self._local_handles(self.layout.definition(index)):
@@ -1187,15 +1325,22 @@ class TrackEditor:
         self.notify("已重做")
 
     def _undo_snapshot(self) -> dict:
-        """一份撤销快照：轨道拓扑 + 用户手工摆的布景（一起撤、一起重做）。"""
+        """一份撤销快照：轨道拓扑 + 底座 / 手工布景（一起撤、一起重做）。"""
         payload = self.layout.to_dict()
         payload["_user_scenery"] = scenery_mod.scenery_to_dict(self.user_scenery)
+        payload["_base_scenery"] = scenery_mod.scenery_to_dict(self.base_scenery)
+        payload["_base_scenery_edited"] = self._base_scenery_edited
         return payload
 
     def _restore(self, payload: dict) -> None:
         self.layout = Layout.from_dict(payload, self.catalog)
         self.user_scenery = scenery_mod.scenery_from_dict(
             payload.get("_user_scenery"))
+        # 只盖字典里出现过的可摆放字段，避免旧快照缺 lakes 时把预设湖草清掉
+        if "_base_scenery" in payload:
+            self.base_scenery = scenery_mod.apply_placeables_dict(
+                self.base_scenery, payload.get("_base_scenery"))
+        self._base_scenery_edited = bool(payload.get("_base_scenery_edited"))
         self.view.layout = self.layout
         self.hover_piece = None
         self.hover_port = None
@@ -1212,6 +1357,10 @@ class TrackEditor:
         if self.user_scenery:
             payload["user_scenery"] = scenery_mod.scenery_to_dict(
                 self.user_scenery)
+        # 有场景预设、或底座被删改过：都把可摆放件写进存档，读档才不会把删掉的房/树变回来
+        if self._base_scenery_edited or self.save_extra.get("scenery"):
+            payload["base_scenery"] = scenery_mod.scenery_to_dict(
+                self.base_scenery)
         try:
             self.save_path.parent.mkdir(parents=True, exist_ok=True)
             with self.save_path.open("w", encoding="utf-8") as handle:
@@ -1219,6 +1368,7 @@ class TrackEditor:
         except OSError as exc:
             self.notify(f"保存失败：{exc}")
             return False
+        self._mark_clean()
         self.notify(f"已保存 {len(self.layout)} 节到 {self.save_path}"
                     "（下次 run.bat --open 这个文件继续编辑）")
         return True
@@ -1235,12 +1385,75 @@ class TrackEditor:
         self._begin_file_prompt(PROMPT_SAVE)
 
     def begin_open_as(self) -> None:
-        """Ctrl+O：进入"填写文件名"模式，从 ``saves/<名字>.json`` 读档。
+        """Ctrl+O：读另一份存档 / 场景。
 
-        和 Ctrl+S 共用同一个输入框，提示里会把 ``saves`` 目录下**已有哪些存档**
-        列出来。空名字直接回车 = 读回当前 ``save_path``（快速读档）；写了名字但
-        文件不存在则留在输入框里报错，不会去动当前布局。
+        当前场景有未保存改动时，先问要不要保存（Y 保存后读、N 不保存直接读、
+        Esc 取消）；确认后再进文件名输入框。读入时会清空当前轨道与布景再载入。
         """
+        if self.has_unsaved_work():
+            self._begin_load_confirm()
+        else:
+            self._begin_file_prompt(PROMPT_LOAD)
+
+    def has_unsaved_work(self) -> bool:
+        """相对上次保存 / 读档，当前布局或布景是否改过。
+
+        完全空的场地（无轨、无手工布景、底座也没删改）不算「有东西要保存」，
+        这样 Ctrl+N 清空后再 Ctrl+O 不会多问一句。
+        """
+        if (self.layout.is_empty and not self.user_scenery
+                and not self._base_scenery_edited):
+            return False
+        return self._state_fingerprint() != self._clean_fingerprint
+
+    def _state_fingerprint(self) -> str:
+        """布局 + 布景 + 场景预设的稳定序列化，用来判断有没有未存改动。"""
+        payload = {
+            "layout": self.layout.to_dict(),
+            "user": scenery_mod.scenery_to_dict(self.user_scenery),
+            "base": scenery_mod.scenery_to_dict(self.base_scenery),
+            "extra": dict(self.save_extra),
+            "base_edited": self._base_scenery_edited,
+        }
+        return json.dumps(payload, sort_keys=True, ensure_ascii=False,
+                          default=str)
+
+    def _mark_clean(self) -> None:
+        self._clean_fingerprint = self._state_fingerprint()
+
+    def _begin_load_confirm(self) -> None:
+        """读档前的「是否先保存」三选一。"""
+        if self._prompt is not None:
+            return
+        self._prompt = PROMPT_LOAD_CONFIRM
+        self._prompt_buffer = ""
+        self._prompt_error = ""
+        self._held.clear()
+        for event in self.bound_key_names():
+            self.base.ignore(event)
+        self.base.accept("y", self._load_confirm_save)
+        self.base.accept("n", self._load_confirm_discard)
+        self.base.accept("escape", self._cancel_file_prompt)
+
+    def _ignore_load_confirm_keys(self) -> None:
+        self.base.ignore("y")
+        self.base.ignore("n")
+        self.base.ignore("escape")
+
+    def _load_confirm_save(self) -> None:
+        """Y：先把当前场景存到 ``save_path``，再进入读档填名。"""
+        self._ignore_load_confirm_keys()
+        self._prompt = None
+        if not self.save():
+            self.bind()
+            self.notify("保存失败，已取消读档")
+            return
+        self._begin_file_prompt(PROMPT_LOAD)
+
+    def _load_confirm_discard(self) -> None:
+        """N：不保存，直接进入读档填名（随后 load 会清空当前场景）。"""
+        self._ignore_load_confirm_keys()
+        self._prompt = None
         self._begin_file_prompt(PROMPT_LOAD)
 
     def _begin_file_prompt(self, purpose: str) -> None:
@@ -1261,13 +1474,14 @@ class TrackEditor:
         self.base.accept("escape", self._cancel_file_prompt)
 
     def _exit_file_prompt(self) -> None:
-        """退出命名模式，恢复全套编辑器快捷键。"""
+        """退出命名 / 确认模式，恢复全套编辑器快捷键。"""
         self._prompt = None
         for char in _SAVE_NAME_CHARS:
             self.base.ignore(char)
         self.base.ignore("backspace")
         self.base.ignore("enter")
         self.base.ignore("escape")
+        self._ignore_load_confirm_keys()
         self.bind()
 
     def _name_append(self, char: str) -> None:
@@ -1350,6 +1564,9 @@ class TrackEditor:
         太长就会从左右两块面板底下穿过去。所以目标路径只回显截断后的文件名
         （见 :meth:`_prompt_target_label`），名单另起一行并另有字符预算。
         """
+        if self._prompt == PROMPT_LOAD_CONFIRM:
+            return ("当前场景有未保存的改动。\n"
+                    "Y 先保存再读档　N 不保存，清空后读档　Esc 取消")
         buffer = self._prompt_buffer
         label = self._prompt_target_label()
         if self._prompt == PROMPT_LOAD:
@@ -1362,26 +1579,60 @@ class TrackEditor:
                 f"　Esc 取消{self._prompt_error}")
 
     def load(self) -> bool:
+        """读入 ``save_path``：先清空当前轨道 / 布景 / 列车，再装新场景。"""
         try:
             with self.save_path.open("r", encoding="utf-8") as handle:
                 payload = json.load(handle)
             loaded = Layout.from_dict(payload, self.catalog)
             user_scenery = scenery_mod.scenery_from_dict(
                 payload.get("user_scenery"))
+            base_raw = payload.get("base_scenery")
+            scenery_key = payload.get("scenery")
         except (OSError, ValueError, KeyError) as exc:
             self.notify(f"读档失败：{exc}")
             return False
+
+        # 换场景前清掉车上线与悬停，避免旧车还挂在已拆的轨道上
+        if self.train_view is not None:
+            self.train_view.destroy()
+            self.train_view = None
+            self.audio.stop()
+
         self.push_undo()
         self.layout = loaded
         self.user_scenery = user_scenery
-        self.view.layout = self.layout
         self.hover_piece = None
+        self.hover_port = None
         self.hover_scenery = None
+        self._hide_ghost()
+        self._hide_scenery_ghost()
+        self._clear_scenery_highlight()
+
+        # 底座布景按存档里的场景预设整份重算，再盖上可能删改过的放置件
+        import scenes as scenes_mod
+        if scenery_key and scenery_key in scenes_mod.presets.BUILDERS:
+            self.base_scenery = scenes_mod.scenery_for(scenery_key)
+            self.save_extra = {scenes_mod.SCENERY_KEY: scenery_key}
+            title = payload.get("title")
+            if title:
+                self.save_extra["title"] = title
+            self._base_scenery_edited = False
+        else:
+            self.base_scenery = scenery_mod.Scenery()
+            self.save_extra.pop("scenery", None)
+            self.save_extra.pop("title", None)
+            self._base_scenery_edited = False
+        if base_raw is not None:
+            self.base_scenery = scenery_mod.apply_placeables_dict(
+                self.base_scenery, base_raw)
+            self._base_scenery_edited = True
+
+        self.view.layout = self.layout
         self.view.sync()
         self._rebuild_scenery()
-        self._clear_scenery_highlight()
         self.camera.frame(self.view.bounds())
-        self.notify(f"已载入 {len(self.layout)} 节")
+        self._mark_clean()
+        self.notify(f"已载入 {len(self.layout)} 节（当前场景已替换）")
         return True
 
     # ==================================================================== #
@@ -1413,7 +1664,13 @@ class TrackEditor:
         self.notify(f"闭环显示：{'开' if self.view.show_loop else '关'}")
 
     def toggle_help(self) -> None:
+        """H：展开 / 收起左侧信息栏（不再整页隐藏，避免挡场景）。"""
         if self.hud is None:
+            return
+        if hasattr(self.hud, "toggle_expanded"):
+            self.hud.toggle_expanded()
+            state = "展开" if getattr(self.hud, "expanded", False) else "收起"
+            self.notify(f"信息栏已{state}")
             return
         self.hud.set_visible(not self.hud.visible)
 
@@ -1463,8 +1720,15 @@ class TrackEditor:
 
         if self.train_view is not None:
             self.train_view.destroy()
-        view = TrainView(spec, self.base.render,
-                         train=Train(spec, drive_boost=DRIVE_BOOST))
+        self._pump_progress(f"正在加载 {spec.name}…", 0.08)
+        try:
+            view = TrainView(
+                spec, self.base.render,
+                train=Train(spec, drive_boost=DRIVE_BOOST),
+                on_progress=self._pump_progress,
+            )
+        finally:
+            self._pump_progress("", 1.0)
         view.set_handle(self.train_handle)
         self.train_view = view
         view.sync(self.view.path, self.layout)
@@ -1482,6 +1746,15 @@ class TrackEditor:
                         f"（{spec.car_count} 节 / {view.consist_length:.1f} m）"
                         "　↑↓ 推手柄　V 切回放置")
         return view
+
+    def _pump_progress(self, message: str, fraction: float) -> None:
+        """刷新加载进度并立刻画两帧，避免主线程卡死时画面完全不动。"""
+        if self.hud is not None and hasattr(self.hud, "set_progress"):
+            self.hud.set_progress(message, fraction)
+        engine = getattr(self.base, "graphicsEngine", None)
+        if engine is not None:
+            engine.renderFrame()
+            engine.renderFrame()
 
     def dismiss_train(self) -> None:
         """把列车从场景里摘掉。"""
@@ -1612,6 +1885,8 @@ class TrackEditor:
         self._refresh_hover()
         self._refresh_ghost()
         self._advance_train(dt)
+        if self.hud is not None and hasattr(self.hud, "tick"):
+            self.hud.tick(dt)
         self._refresh_hud()
         if self._toast_frames > 0:
             self._toast_frames -= 1
@@ -1683,9 +1958,9 @@ class TrackEditor:
     # ---------------------------------------------------------------- 输入
 
     def _apply_drag(self) -> None:
-        if not self._has_mouse():
-            return
         current = self._mouse()
+        if current is None:
+            return
         if self._last_mouse is not None:
             dx = current[0] - self._last_mouse[0]
             dy = current[1] - self._last_mouse[1]
@@ -1726,8 +2001,8 @@ class TrackEditor:
         if self.hud is None:
             return
 
-        # 填文件名时是**模态**的：底部那两块（帮助 / 列车）让位，好让提示条
-        # 这一行长得下 —— 提示条是"底部居中"的一行字，宽度受中间那一列限制。
+        # 填文件名时是**模态**的：左侧帮助让位，好让底部居中提示条长得下。
+        # 右下「运行信息」常驻，不跟着收。
         prompting = self._prompt is not None
 
         if self.placing_scenery:
@@ -1787,10 +2062,9 @@ class TrackEditor:
 
         cursor = "—"
         if self.placing_scenery and self.hover_scenery is not None:
-            field, index = self.hover_scenery
-            items = getattr(self.user_scenery, field)
-            if 0 <= index < len(items):
-                cursor = items[index].footprint().label
+            item = self._scenery_at(*self.hover_scenery)
+            if item is not None:
+                cursor = item.footprint().label
         elif self.hover_piece is not None:
             definition = self.layout.definition(self.hover_piece)
             extra = ""
@@ -1802,17 +2076,17 @@ class TrackEditor:
         self.hud.set_text("status", "\n".join(lines))
 
         self.hud.set_text("help", "" if prompting else HELP_TEXT)
-        self.hud.set_text("train", "" if prompting else self._train_hud_text())
+        self.hud.set_text("train", self._train_hud_text())
         self.hud.set_text("toast", self._prompt_text() if prompting else self._toast)
 
     def _train_hud_text(self) -> str:
-        """右下角那块"列车"面板的文本。空字符串 = 整块隐藏。"""
+        """右下角常驻「运行信息」。无车时返回空串（整块隐藏）。"""
         view = self.train_view
         if view is None:
             return ""
         spec = view.spec
         lines = [
-            f"列车  {spec.name}",
+            f"运行信息  {spec.name}",
             f"{view.car_count} 节 / {view.consist_length:.1f} m"
             f"   三角形 {view.triangle_count():,}",
         ]
@@ -1823,7 +2097,7 @@ class TrackEditor:
             return "\n".join(lines)
 
         state = view.state
-        mode = "　倒行" if view.train.state.direction < 0 else ""
+        mode = "　倒行" if view.train.state.direction < 0 else "　正向"
         lines.append(f"速度  {state.speed_kmh:5.1f} km/h"
                      f"   （{state.v:.2f} m/s）{mode}")
         lines.append(f"手柄  {self.handle_label()}")
@@ -1930,7 +2204,16 @@ class TrackEditor:
     def _on_press(self) -> None:
         if self._prompt is not None:
             return
-        self._press_mouse = self._mouse()
+        # 先吃左侧信息栏按钮，避免点「信息 / 固定」时误放轨道
+        if self.hud is not None and hasattr(self.hud, "handle_click"):
+            if self.hud.handle_click():
+                self._press_mouse = None
+                self._press_moved = 0.0
+                return
+        mouse = self._mouse()
+        if mouse is None:
+            return
+        self._press_mouse = mouse
         self._press_moved = 0.0
         # 视角模式下左键当右键用：按住就转视角。布景模式是放置，不转视角。
         if self.mode == MODE_VIEW:
@@ -1954,8 +2237,11 @@ class TrackEditor:
             self._on_drag_end()
 
     def _on_drag_start(self, mode: str) -> None:
+        mouse = self._mouse()
+        if mouse is None:
+            return
         self._drag_mode = mode
-        self._last_mouse = self._mouse()
+        self._last_mouse = mouse
 
     def _on_drag_end(self) -> None:
         self._drag_mode = None

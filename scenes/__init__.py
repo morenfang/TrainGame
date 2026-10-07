@@ -16,6 +16,9 @@
 **手工摆的那几件例外**：用户在编辑器里手动放下的房 / 车站 / 大山 / 树，不能靠
 预设重算出来，所以单独存进 ``user_scenery`` 一段（见 :func:`scenery.scenery_to_dict`）。
 程序化底座按 key 重算、手工件逐件还原，两层各管各的。
+
+若用户在布景模式里删过底座上的房 / 车站 / 山 / 树，存档会多一段 ``base_scenery``
+（只含可摆放类），读档时盖回预设重算出来的对应字段。
 """
 
 from __future__ import annotations
@@ -49,15 +52,22 @@ class LoadedScene:
     layout: Layout
     scenery_key: str | None = None
     plot_size: float = DEFAULT_PLOT
-    #: 用户手工摆放的布景（房 / 车站 / 大山 / 树），存档里 ``user_scenery`` 那一段。
+    #: 用户手工摆放的布景（房 / 车站 / 大山 / 树 / 湖 / 绿地），存档里 ``user_scenery``。
     user_scenery: scenery_mod.Scenery = field(default_factory=scenery_mod.Scenery)
+    #: 底座上被删改过的可摆放件原始字典（``None`` = 仍用预设原样）。
+    #: 保留原始 dict，旧存档缺 ``lakes`` / ``meadows`` 键时不会把预设湖草清掉。
+    base_placeables: dict | None = None
 
     @property
     def scenery(self) -> scenery_mod.Scenery:
         """跟着这份存档的程序化布景（存档里没记预设时是一份空布景）。"""
         if self.scenery_key is None:
-            return scenery_mod.Scenery()
-        return scenery_for(self.scenery_key)
+            base = scenery_mod.Scenery()
+        else:
+            base = scenery_for(self.scenery_key)
+        if self.base_placeables is None:
+            return base
+        return scenery_mod.apply_placeables_dict(base, self.base_placeables)
 
 
 def scenery_for(key: str) -> scenery_mod.Scenery:
@@ -90,11 +100,13 @@ def load(path: str | Path, catalog: Catalog | None = None) -> LoadedScene:
     key = payload.get(SCENERY_KEY)
     if key not in presets.BUILDERS:
         key = None                        # 存档没记 / 记的是已经不存在的预设
+    base_raw = payload.get("base_scenery")
     return LoadedScene(
         layout=Layout.from_dict(payload, catalog),
         scenery_key=key,
         plot_size=plot_size_of(key),
         user_scenery=scenery_mod.scenery_from_dict(payload.get("user_scenery")),
+        base_placeables=base_raw if isinstance(base_raw, dict) else None,
     )
 
 
