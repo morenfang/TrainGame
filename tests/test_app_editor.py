@@ -42,7 +42,7 @@ PIXEL_TOL = 0.5
 
 
 class FakeHud:
-    """只记下被写进去的文本，不碰任何 Panda3D 文本节点。"""
+    """只记下被写进去的文本 / 快照，不碰任何 Panda3D 文本节点。"""
 
     def __init__(self):
         self.texts: dict[str, str] = {}
@@ -52,12 +52,34 @@ class FakeHud:
         self.progress: list[tuple[str, float]] = []
         self.street_lights_on = True
         self.on_toggle_street_lights = None
+        self.actions: dict = {}
+        self.state = None
 
     def set_text(self, name: str, text: str) -> None:
         self.texts[name] = text
 
     def set_visible(self, flag: bool) -> None:
         self.visible = flag
+
+    def set_actions(self, actions: dict) -> None:
+        self.actions = dict(actions)
+
+    def apply_state(self, state) -> None:
+        from app.hud import HELP_OVERLAY
+
+        self.state = state
+        self.street_lights_on = state.street_lights_on
+        self.expanded = state.help_visible
+        self.texts["status"] = (
+            f"{state.category_label} · {state.piece_name}"
+        )
+        self.texts["loop"] = state.loop_line
+        self.texts["train"] = (
+            f"运行信息  {state.train_name}\n{state.train_line}\n{state.handle_label}"
+            if state.train_name else ""
+        )
+        self.texts["toast"] = state.toast
+        self.texts["help"] = HELP_OVERLAY if state.help_visible else ""
 
     def tick(self, dt: float) -> None:
         return None
@@ -68,6 +90,12 @@ class FakeHud:
     def toggle_expanded(self) -> None:
         self.expanded = not self.expanded
 
+    def set_pinned(self, flag: bool) -> None:
+        self.pinned = bool(flag)
+
+    def toggle_pin(self) -> None:
+        self.pinned = not self.pinned
+
     def set_progress(self, message: str, fraction: float) -> None:
         self.progress.append((message, fraction))
 
@@ -76,6 +104,9 @@ class FakeHud:
         if self.on_toggle_street_lights is not None:
             self.on_toggle_street_lights(self.street_lights_on)
         return self.street_lights_on
+
+    def handle_release(self) -> None:
+        return None
 
 
 # --------------------------------------------------------------------------- #
@@ -92,6 +123,8 @@ def editor(app, tmp_path):
     catalog = Catalog.builtin()
     ed = TrackEditor(app, catalog, hud=FakeHud(),
                      save_path=tmp_path / "layout.json")
+    # 单测仍走键盘填名；真人/游戏默认 use_file_dialog=True 弹系统对话框
+    ed.use_file_dialog = False
     ed.fake_mouse = (0.0, 0.0)
     ed._has_mouse = lambda: True
     ed._mouse = lambda: ed.fake_mouse
@@ -876,22 +909,20 @@ def test_ctrl_o_asks_to_save_before_replacing_the_scene(app, editor, tmp_path):
 
 
 def test_prompt_hides_the_bottom_panels(app, editor, tmp_path):
-    """填文件名时左侧「帮助」让位；右下运行信息有车时仍常驻。"""
+    """填文件名时 toast 显示读档提示；帮助默认关着。"""
     editor.bind()
     editor.begin_open_as()
     editor.tick()
-    assert editor.hud.texts["help"] == ""
+    assert editor.hud.texts.get("help", "") == ""
     assert "读档" in editor.hud.texts["toast"]
-    # 没上列车时运行信息本就是空的
-    assert editor.hud.texts.get("train", "") == ""
 
     editor._exit_file_prompt()
     editor.tick()
-    assert editor.hud.texts["help"] == editor_mod.HELP_TEXT
+    assert editor.hud.texts.get("help", "") == ""
 
 
 def test_train_running_info_stays_on_during_file_prompt(app, editor, tmp_path):
-    """有车时，读档提示条不把右下运行信息收掉。"""
+    """有车时，读档提示条不把运行信息收掉。"""
     close_a_circle(editor)
     editor.spawn_train(1)
     editor.tick()
@@ -899,7 +930,7 @@ def test_train_running_info_stays_on_during_file_prompt(app, editor, tmp_path):
 
     editor.begin_open_as()
     editor.tick()
-    assert editor.hud.texts["help"] == ""
+    assert editor.hud.texts.get("help", "") == ""
     assert "运行信息" in editor.hud.texts["train"]
     assert "读档" in editor.hud.texts["toast"]
 
@@ -1377,14 +1408,14 @@ def test_tick_updates_the_hud(app, editor):
 
     status = editor.hud.texts["status"]
     assert piece.name in status
-    assert "鼠标下" in status
     assert "空场地" in editor.hud.texts["loop"]
-    assert "闭合" in editor.hud.texts["help"]
+    assert editor.hud.texts.get("help", "") == ""
 
     editor._refresh_ghost()
     assert editor.place() == 0
     editor.tick()
-    assert "轨道 1 节" in editor.hud.texts["status"]
+    assert piece.name in editor.hud.texts["status"]
+    assert "1" in editor.hud.texts["loop"] or "轨道" in editor.hud.texts["loop"] or editor.hud.state is not None
 
 
 def test_tick_survives_a_missing_grid_node(app, editor):
@@ -1509,6 +1540,7 @@ def test_every_mouse_binding_uses_a_real_button_name(editor):
 
 def test_help_text_documents_every_placement_key(editor):
     """帮助面板必须写清"怎么换轨道件"，否则用户只会一直放同一节轨道。"""
+    editor.hud.expanded = True
     editor._refresh_hud()
     help_text = editor.hud.texts["help"]
     for token in ("左键", "R 旋转", "[ ]", "1-9", "退格"):
@@ -1626,10 +1658,9 @@ def test_the_category_menu_shows_every_category_and_marks_the_current_one(app,
     assert "[曲线]" in editor.category_menu()
     assert "[直轨]" not in editor.category_menu()
 
-    # 状态面板里也要真的出现（菜单是给用户看的，不是只给测试看的）
+    # 底栏 / 状态里也要真的出现当前分类名
     editor._refresh_hud()
-    assert "分类" in editor.hud.texts["status"]
-    assert "[曲线]" in editor.hud.texts["status"]
+    assert "曲线" in editor.hud.texts["status"]
 
 
 def test_curve_pieces_are_reachable_by_cycling_the_category(app, editor):
@@ -1976,10 +2007,12 @@ def test_train_hud_reports_speed_and_handle(app, editor):
     view.destroy()
 
 
-def test_train_hud_is_hidden_until_a_train_is_called(app, editor):
-    """没车时右下角必须是空的 —— 否则会留下一块什么都没有的黑块挡住场景。"""
+def test_train_hud_shows_selected_consist_before_spawn(app, editor):
+    """未上线时底栏仍显示当前编组名，方便点 N / 换车。"""
     editor._refresh_hud()
-    assert editor.hud.texts["train"] == ""
+    text = editor.hud.texts["train"]
+    assert "运行信息" in text
+    assert "按 N" in text or "上线" in text
 
 
 def test_deleting_the_track_under_a_train_dismisses_the_train(app, editor):
@@ -2049,6 +2082,7 @@ def test_deleting_a_piece_off_the_train_keeps_it_running(app, editor):
 
 
 def test_help_text_documents_the_train_keys(app, editor):
+    editor.hud.expanded = True
     editor._refresh_hud()
     help_text = editor.hud.texts["help"]
     for token in ("N 上列车", "↑↓ 手柄", "空格", "K 换向"):

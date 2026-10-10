@@ -7,8 +7,8 @@
     python app/main.py --width 1600 --height 900
 
 打开后就是"在一片草垫子上拼轨道"：鼠标移到网格上点左键放下第一节，
-之后每一节都吸到淡绿色的空闲端口上。屏幕四角常驻 HUD，右上角实时告诉你
-"现在这套轨道闭合成环了没有、差多少毫米"。
+之后每一节都吸到淡绿色的空闲端口上。左侧五模式栏选件，底栏控制台显示
+闭环提示、时速表与 Tomix 手柄；``Ctrl+S`` / ``Ctrl+O`` 走系统文件对话框。
 
 ``--scene`` 与布景
 ------------------------------------------------
@@ -86,7 +86,7 @@ def _print_scenes(catalog: Catalog) -> None:
         print(f"           布景 {scene.scenery.item_count} 件，场地 "
               f"{scene.plot_size:.0f} m × {scene.plot_size:.0f} m")
     print("\n进去之后：N 换车（自动上线），↑↓ 推手柄，空格 惰行，"
-          "Shift+空格 急停，H 打开信息栏，Ctrl+S 保存。")
+          "Shift+空格 急停，H 帮助，Ctrl+S 保存。")
 
 
 def _load_startup_layout(path: str, catalog: Catalog):
@@ -183,6 +183,7 @@ def main(argv=None) -> int:
                          save_path=args.save_path or args.open_path,
                          save_extra=save_extra,
                          scenery=base_scenery, user_scenery=user_scenery)
+    editor.use_file_dialog = True  # Ctrl+S / O 与左栏存档走系统文件对话框
     editor.bind()
 
     if layout is not None and not layout.is_empty:
@@ -206,7 +207,7 @@ def main(argv=None) -> int:
         base.taskMgr.add(_frame_limiter(base, args.frames), "frame_limiter")
 
     print(f"[启动] {len(catalog)} 个轨道件，{len(catalog.categories)} 个类别。"
-          f" 点左侧「信息」或按 H 打开信息栏，Ctrl+S 保存。")
+          f" 左栏五模式选件；底栏表盘/手柄；H 帮助，Ctrl+S 保存。")
     base.run()
     return 0
 

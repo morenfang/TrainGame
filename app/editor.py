@@ -205,7 +205,7 @@ DRIVE_BOOST = 1.8
 #: ``tests/test_app_hud.py`` 的 ``_WORST_CASE`` 直接引用它，于是往这里加一行、
 #: 加了之后超出面板能容纳的高度，测试会当场发现（而不是等用户看到字压在一起）。
 HELP_TEXT = (
-    "V 放置/视角　B 布景　H 信息栏　左键 操作　右键 环绕　滚轮 缩放\n"
+    "V 放置/视角　B 布景　H 帮助　左键 操作　右键 环绕　滚轮 缩放\n"
     "R 旋转　C 闭合　X 删除　, . 分类　[ ] 换件　1-9 直选　退格 撤销\n"
     "N 上列车　↑↓ 手柄　空格 惰行　K 换向　J 鸣笛　Ctrl+S / O 存读档"
 )
@@ -268,6 +268,8 @@ class TrackEditor:
         #: 手柄位：``> 0`` 牵引、``< 0`` 制动、``0`` 惰行。维护在编辑器这一层，
         #: 于是"换一列车"不会把用户推好的档位弄丢。
         self.train_handle = 0.0
+        #: 左栏 HUD 模式：track|scenery|train|view|file（与 V2 Proposal 五模式对齐）
+        self._hud_tab = "track"
 
         self.categories = list(catalog.categories)
         self._category_index = 0
@@ -303,6 +305,10 @@ class TrackEditor:
 
         #: 存档所在的目录（Ctrl+S 填文件名时，保存到 ``<该目录>/<名字>.json``）。
         self._save_dir = self.save_path.parent
+        #: 存读档用系统文件对话框。``main`` 里打开；单测默认关，仍走键盘填名。
+        self.use_file_dialog = False
+        #: 可注入：``(save: bool, initial_dir, initial_file, title) -> Path | None``
+        self.file_dialog = None
         #: 文件名输入框当前开着没；开着时值是用途（:data:`PROMPT_SAVE` /
         #: :data:`PROMPT_LOAD`），关着时是 ``None``。键盘也只喂给这个输入框。
         self._prompt: str | None = None
@@ -344,6 +350,8 @@ class TrackEditor:
         if self.hud is not None and hasattr(self.hud, "on_toggle_street_lights"):
             self.hud.street_lights_on = True
             self.hud.on_toggle_street_lights = self.set_street_lights_enabled
+        if self.hud is not None and hasattr(self.hud, "set_actions"):
+            self._wire_hud_actions()
         self._rebuild_scenery()
 
         #: 列车音效（引擎随车速变速 + 风笛）。null 音频下自动退化为空壳。
@@ -379,6 +387,32 @@ class TrackEditor:
         self._piece_index = 0
         self.attach_slot = 0
         self.notify(f"类别：{self._category_label()}")
+
+    def select_category(self, category: str) -> bool:
+        """按类别 id 直选（左侧图标栏）。"""
+        if category not in self.categories:
+            return False
+        self._category_index = list(self.categories).index(category)
+        self._piece_index = 0
+        self.attach_slot = 0
+        if self.placing_scenery:
+            self.mode = MODE_BUILD
+            self._hide_scenery_ghost()
+        self.notify(f"类别：{self._category_label()}")
+        return True
+
+    def select_scenery_category(self, category: str) -> bool:
+        """按布景分类 id 直选。"""
+        if category not in SCENERY_CATEGORIES:
+            return False
+        self._scenery_category_index = SCENERY_CATEGORIES.index(category)
+        self._scenery_kind_index = 0
+        self._scenery_ghost_key = None
+        if not self.placing_scenery:
+            self.mode = MODE_SCENERY
+            self._hide_ghost()
+        self.notify(f"布景分类：{SCENERY_CATEGORY_LABELS[category]}")
+        return True
 
     def select_piece(self, index: int) -> None:
         pieces = self.pieces_in_category
@@ -472,21 +506,41 @@ class TrackEditor:
         视角模式下左键改拖视角（与右键一致），幽灵预览整块收起 —— 加载列车之后
         进入的就是这一档，免得鼠标一划就把轨道甩到场景里。
         """
-        self.mode = MODE_VIEW if self.building else MODE_BUILD
-        if not self.building:
-            self._hide_ghost()
-            self._hide_scenery_ghost()
-        self.notify(f"鼠标模式：{self._mode_label()}")
+        if self.building or self.placing_scenery:
+            self.set_hud_mode("view")
+        else:
+            self.set_hud_mode("track")
 
     def toggle_scenery_mode(self) -> None:
         """进出布景模式：B 开、B 关（关的时候回到放置轨道）。"""
         if self.placing_scenery:
+            self.set_hud_mode("track")
+        else:
+            self.set_hud_mode("scenery")
+
+    def set_hud_mode(self, which: str) -> None:
+        """左栏五模式切换。"""
+        self._hud_tab = which
+        if which == "track":
             self.mode = MODE_BUILD
             self._hide_scenery_ghost()
             self._clear_scenery_highlight()
-        else:
+        elif which == "scenery":
             self.mode = MODE_SCENERY
             self._hide_ghost()
+        elif which == "view":
+            self.mode = MODE_VIEW
+            self._hide_ghost()
+            self._hide_scenery_ghost()
+            self._clear_scenery_highlight()
+        elif which == "train":
+            self.mode = MODE_VIEW
+            self._hide_ghost()
+            self._hide_scenery_ghost()
+            self._clear_scenery_highlight()
+        elif which == "file":
+            # 仅展开存/读入口，不改放置语义
+            pass
         self.notify(f"鼠标模式：{self._mode_label()}")
 
     # ==================================================================== #
@@ -1376,22 +1430,25 @@ class TrackEditor:
     # ---------------------------------------------------------------- 存档命名
 
     def begin_save_as(self) -> None:
-        """Ctrl+S：进入"填写文件名"模式，把布局存到 ``saves/<名字>.json``。
+        """Ctrl+S / 左栏「存档」：弹出系统「另存为」对话框。
 
-        之后键盘的字母 / 数字键喂进一个输入框（编辑器自己的快捷键暂时让位），
-        回车 = 保存，退格删字，Esc 取消。不输入名字直接回车，就存回当前的
-        ``save_path``（和原来一样"固定文件名"的快速保存）。
+        测试里 ``use_file_dialog=False`` 时仍走键盘填名（见 ``_begin_file_prompt``）。
         """
-        self._begin_file_prompt(PROMPT_SAVE)
+        if self.use_file_dialog:
+            self._dialog_save()
+        else:
+            self._begin_file_prompt(PROMPT_SAVE)
 
     def begin_open_as(self) -> None:
-        """Ctrl+O：读另一份存档 / 场景。
+        """Ctrl+O / 左栏「读取」：弹出系统「打开」对话框。
 
         当前场景有未保存改动时，先问要不要保存（Y 保存后读、N 不保存直接读、
-        Esc 取消）；确认后再进文件名输入框。读入时会清空当前轨道与布景再载入。
+        Esc 取消）；确认后再开对话框。读入时会清空当前轨道与布景再载入。
         """
         if self.has_unsaved_work():
             self._begin_load_confirm()
+        elif self.use_file_dialog:
+            self._dialog_load()
         else:
             self._begin_file_prompt(PROMPT_LOAD)
 
@@ -1441,20 +1498,62 @@ class TrackEditor:
         self.base.ignore("escape")
 
     def _load_confirm_save(self) -> None:
-        """Y：先把当前场景存到 ``save_path``，再进入读档填名。"""
+        """Y：先把当前场景存到 ``save_path``，再打开读档对话框。"""
         self._ignore_load_confirm_keys()
         self._prompt = None
         if not self.save():
             self.bind()
             self.notify("保存失败，已取消读档")
             return
-        self._begin_file_prompt(PROMPT_LOAD)
+        if self.use_file_dialog:
+            self.bind()
+            self._dialog_load()
+        else:
+            self._begin_file_prompt(PROMPT_LOAD)
 
     def _load_confirm_discard(self) -> None:
-        """N：不保存，直接进入读档填名（随后 load 会清空当前场景）。"""
+        """N：不保存，直接打开读档对话框（随后 load 会清空当前场景）。"""
         self._ignore_load_confirm_keys()
         self._prompt = None
-        self._begin_file_prompt(PROMPT_LOAD)
+        if self.use_file_dialog:
+            self.bind()
+            self._dialog_load()
+        else:
+            self._begin_file_prompt(PROMPT_LOAD)
+
+    def _pick_path(self, *, save: bool, title: str) -> Path | None:
+        """走注入的 ``file_dialog``，否则系统原生对话框。"""
+        initial_dir = self._save_dir
+        initial_file = self.save_path.name if save else None
+        if self.file_dialog is not None:
+            return self.file_dialog(
+                save=save, initial_dir=initial_dir,
+                initial_file=initial_file, title=title,
+            )
+        from app.file_dialog import ask_open_json, ask_save_json
+        if save:
+            return ask_save_json(
+                initial_dir=initial_dir, initial_file=initial_file, title=title,
+            )
+        return ask_open_json(initial_dir=initial_dir, title=title)
+
+    def _dialog_save(self) -> None:
+        path = self._pick_path(save=True, title="保存布局")
+        if path is None:
+            self.notify("已取消")
+            return
+        self.save_path = path
+        self._save_dir = path.parent
+        self.save()
+
+    def _dialog_load(self) -> None:
+        path = self._pick_path(save=False, title="读取布局")
+        if path is None:
+            self.notify("已取消")
+            return
+        self.save_path = path
+        self._save_dir = path.parent
+        self.load()
 
     def _begin_file_prompt(self, purpose: str) -> None:
         """打开文件名输入框。``purpose`` 决定回车之后是保存还是读档。"""
@@ -1664,15 +1763,61 @@ class TrackEditor:
         self.notify(f"闭环显示：{'开' if self.view.show_loop else '关'}")
 
     def toggle_help(self) -> None:
-        """H：展开 / 收起左侧信息栏（不再整页隐藏，避免挡场景）。"""
+        """H：展开 / 收起帮助浮层。"""
         if self.hud is None:
             return
         if hasattr(self.hud, "toggle_expanded"):
             self.hud.toggle_expanded()
-            state = "展开" if getattr(self.hud, "expanded", False) else "收起"
-            self.notify(f"信息栏已{state}")
+            state = "开" if getattr(self.hud, "expanded", False) else "关"
+            self.notify(f"帮助：{state}")
             return
         self.hud.set_visible(not self.hud.visible)
+
+    def _wire_hud_actions(self) -> None:
+        """把底栏 / 左栏点击接到编辑器动作。"""
+        def select_item(index: int) -> None:
+            if self.placing_scenery or self._hud_tab == "scenery":
+                self.select_scenery_kind(index)
+            else:
+                self.select_piece(index)
+
+        def select_train(index: int) -> None:
+            if not len(self.trains):
+                return
+            self._train_index = int(index) % len(self.trains)
+            self.notify(f"编组：{self.train_spec.name}")
+
+        def handle_notch(notch: int) -> None:
+            from app.hud import notch_to_handle
+            self.set_train_handle(notch_to_handle(notch))
+
+        self.hud.set_actions({
+            "hud_mode": self.set_hud_mode,
+            "category": self.select_category,
+            "scenery_category": self.select_scenery_category,
+            "select_item": select_item,
+            "select_train": select_train,
+            "spawn_train": lambda: self.spawn_train(
+                step=0 if self.train_view is not None else 1,
+            ),
+            "handle_notch": handle_notch,
+            "emergency": self.emergency_stop_train,
+            "reverse": self.reverse_train_direction,
+            "horn": self.horn_train,
+            "file_save": self.begin_save_as,
+            "file_open": self.begin_open_as,
+        })
+
+    def set_train_handle(self, value: float) -> float | None:
+        """把手柄设到绝对值（Tomix 档位点选）。"""
+        if self.train_view is None:
+            self.notify("先按 N 召唤一列列车")
+            return None
+        value = max(-1.0, min(1.0, float(value)))
+        self.train_view.set_handle(value)
+        self.train_handle = value
+        self.notify(f"手柄　{self.handle_label()}")
+        return self.train_handle
 
     def frame_layout(self) -> None:
         self.camera.frame(self.view.bounds())
@@ -2001,86 +2146,123 @@ class TrackEditor:
         if self.hud is None:
             return
 
-        # 填文件名时是**模态**的：左侧帮助让位，好让底部居中提示条长得下。
-        # 右下「运行信息」常驻，不跟着收。
         prompting = self._prompt is not None
-
-        if self.placing_scenery:
-            placed = sum(1 for _ in scenery_mod.placeable_items(self.user_scenery))
-            lines = [
-                f"轨道编辑器 · {self._mode_label()}",
-                f"当前布景  {self.current_scenery_label()}   "
-                f"[{self._scenery_kind_index + 1}/{len(self.scenery_items)}]",
-                f"分类  {self.scenery_menu()}",
-                f"物件  {self.scenery_items_menu()}",
-                f"朝向  {math.degrees(self._scenery_heading) % 360:.0f}°   已摆放  "
-                f"{placed} 件",
-                f"左键 放下   X 删除   [ ] 换件   , . 换分类   1-9 直选   R 旋转",
-            ]
-        else:
-            pieces = self.pieces_in_category
-            piece = self.current_piece
-            attach = self._attach_port(piece)
-            lines = [
-                f"轨道编辑器 · {self._mode_label()}",
-                f"当前件  {piece.name}   [{self._category_label()} "
-                f"{self._piece_index + 1}/{len(pieces)}]",
-                f"分类  {self.category_menu()}",
-                f"接驳端口  {attach}"
-                + ("（吸附中）" if self.placement and self.placement.snapped else ""),
-                f"轨道 {len(self.layout)} 节   总长 {self.layout.total_length():.1f} m"
-                f"   三角形 {self.view.triangle_count():,}",
-            ]
+        toast = self._prompt_text() if prompting else self._toast
 
         closure = self.view.closure
         if closure is None or self.layout.is_empty:
-            loop = "空场地：在网格上点左键放下第一节"
+            loop = "空场地 · 左键放下第一节"
         elif closure.closed:
-            loop = (f"闭环成立  {closure.visit_count} 段 / "
-                    f"{closure.total_length:.2f} m   接缝误差 "
-                    f"{closure.gap_distance * 1000:.6f} mm")
-            # 首尾严丝合缝但没 connect() 的环：列车**现在就能跑**（见
-            # core.track.path 模块文档结论 2），但存档里没有那道缝 —— 以后接着往
-            # 这条链上加件时它会重新变成开链。所以这里必须留着 C 的出路：只说
-            # "闭环成立"的话，用户就没有任何理由去按 C，也就永远不知道还有这回事。
+            loop = (f"闭环 {closure.visit_count} 段 / "
+                    f"{closure.total_length:.1f} m")
             if self.seam_is_aligned():
-                loop += "\n接缝已对齐但没焊死 —— 按 C 把它固定进存档"
+                loop += " · 按 C 焊死"
+        elif self.seam_is_aligned():
+            loop = "接缝已对齐 · 按 C 合拢"
         else:
-            hint = ""
-            if self.seam_is_aligned():
-                hint = "\n接缝已对齐 —— 按 C 合拢"
+            tip = self.auto_close_hint()
+            loop = tip if tip else (
+                f"未闭环 · 缺口 {closure.gap_distance:.2f} m"
+            )
+
+        pieces = self.pieces_in_category
+        catalog_items = tuple((p.id, p.name) for p in pieces)
+        scenery_rail = tuple(
+            (cid, SCENERY_CATEGORY_LABELS[cid]) for cid in SCENERY_CATEGORIES
+        )
+
+        train_name = ""
+        train_line = ""
+        speed_kmh = 0.0
+        distance_m = 0.0
+        direction = "正向"
+        train_online = self.train_view is not None
+        if self.train_view is not None:
+            view = self.train_view
+            train_name = view.spec.name
+            if view.placement_error is not None:
+                train_line = f"未上线：{view.placement_error}"
+                train_online = False
             else:
-                tip = self.auto_close_hint()
-                if tip:
-                    hint = f"\n{tip}"
-            loop = (f"未闭环  已铺 {closure.visit_count} 段 / "
-                    f"{closure.total_length:.2f} m\n"
-                    f"缺口 {closure.gap_distance:.4f} m   "
-                    f"航向差 {math.degrees(closure.gap_heading):.3f}°\n"
-                    f"原因：{closure.reason}{hint}")
+                state = view.state
+                direction = "倒行" if view.train.state.direction < 0 else "正向"
+                speed_kmh = float(state.speed_kmh)
+                distance_m = float(state.distance)
+                train_line = (
+                    f"{speed_kmh:5.1f} km/h · {direction} · "
+                    f"{distance_m:.0f} m"
+                )
+        elif self.train_spec is not None:
+            train_name = self.train_spec.name
+            train_line = "按 N 或点车名上线"
+
+        train_list = tuple(
+            (tid, self.trains[tid].name) for tid in self.trains.ids
+        )
+
+        # 键位切换放置/布景时同步左栏 tab（用户点「存档/列车」时保持）
+        if self._hud_tab not in ("train", "file"):
+            if self.placing_scenery:
+                self._hud_tab = "scenery"
+            elif self.building:
+                self._hud_tab = "track"
+            else:
+                self._hud_tab = "view"
+
+        help_visible = bool(getattr(self.hud, "expanded", False))
+
+        if hasattr(self.hud, "apply_state"):
+            from app.hud import HudState
+            self.hud.apply_state(HudState(
+                hud_mode=self._hud_tab,
+                mode=("scenery" if self.placing_scenery
+                      else ("place" if self.building else "look")),
+                placing=self.building and not self.placing_scenery,
+                scenery=self.placing_scenery,
+                category=self.category,
+                category_label=self._category_label(),
+                piece_name=(self.current_scenery_label() if self.placing_scenery
+                            else self.current_piece.name),
+                piece_index=(self._scenery_kind_index if self.placing_scenery
+                             else self._piece_index),
+                piece_count=(len(self.scenery_items) if self.placing_scenery
+                             else len(pieces)),
+                catalog_items=catalog_items,
+                scenery_category=self.scenery_category,
+                scenery_rail=scenery_rail,
+                scenery_items=self.scenery_items,
+                scenery_index=self._scenery_kind_index,
+                loop_line=loop,
+                train_name=train_name,
+                train_line=train_line,
+                handle_label=self.handle_label(),
+                handle=float(self.train_handle),
+                train_online=train_online,
+                speed_kmh=speed_kmh,
+                distance_m=distance_m,
+                direction=direction,
+                train_list=train_list,
+                train_index=self._train_index % max(len(self.trains.ids), 1),
+                toast=toast,
+                help_visible=help_visible,
+                street_lights_on=self.street_lights_enabled,
+                track_categories=tuple(self.categories),
+            ))
+            return
+
+        # FakeHud / 旧接口：仍写 texts
         self.hud.set_text("loop", loop)
-
-        cursor = "—"
-        if self.placing_scenery and self.hover_scenery is not None:
-            item = self._scenery_at(*self.hover_scenery)
-            if item is not None:
-                cursor = item.footprint().label
-        elif self.hover_piece is not None:
-            definition = self.layout.definition(self.hover_piece)
-            extra = ""
-            if definition.is_switch:
-                extra = f"  道岔档位 route #{self.layout.switch_of(self.hover_piece)}"
-            cursor = f"#{self.hover_piece} {definition.name}{extra}"
-        lines.append("")
-        lines.append(f"鼠标下：{cursor}")
-        self.hud.set_text("status", "\n".join(lines))
-
-        self.hud.set_text("help", "" if prompting else HELP_TEXT)
+        self.hud.set_text(
+            "status",
+            f"{self._category_label()} · "
+            f"{self.current_scenery_label() if self.placing_scenery else self.current_piece.name}",
+        )
+        self.hud.set_text("help", HELP_TEXT if help_visible else "")
         self.hud.set_text("train", self._train_hud_text())
-        self.hud.set_text("toast", self._prompt_text() if prompting else self._toast)
+        self.hud.set_text("toast", toast)
 
     def _train_hud_text(self) -> str:
-        """右下角常驻「运行信息」。无车时返回空串（整块隐藏）。"""
+        """底栏状态芯片用的运行摘要。无车时返回空串。"""
         view = self.train_view
         if view is None:
             return ""
@@ -2204,7 +2386,7 @@ class TrackEditor:
     def _on_press(self) -> None:
         if self._prompt is not None:
             return
-        # 先吃左侧信息栏按钮，避免点「信息 / 固定」时误放轨道
+        # 先吃左栏 HUD 点击（模式 / 夜景 / 帮助 / 固定 / 件库），避免误放轨道
         if self.hud is not None and hasattr(self.hud, "handle_click"):
             if self.hud.handle_click():
                 self._press_mouse = None
@@ -2223,6 +2405,8 @@ class TrackEditor:
     def _on_release(self) -> None:
         if self._prompt is not None:
             return
+        if self.hud is not None and hasattr(self.hud, "handle_release"):
+            self.hud.handle_release()
         # 拖动过就不算点击，避免"环绕视角时顺手放下一节轨道"。
         # 视角模式下左键根本不放置，只有放置 / 布景模式才认这一次点击。
         if self._press_mouse is not None and self._press_moved <= CLICK_SLOP_PX:

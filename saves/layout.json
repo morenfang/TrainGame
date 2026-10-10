@@ -418,6 +418,26 @@
         "heading": 14.13716694115408,
         "seed": 869037059,
         "kind": "tower"
+      },
+      {
+        "x": 152.41435103296737,
+        "z": 109.38174679433996,
+        "width": 12.27964260638203,
+        "depth": 11.689545784775042,
+        "height": 39.638188179429235,
+        "heading": 1.5707963267948966,
+        "seed": 720376157,
+        "kind": "tower"
+      },
+      {
+        "x": 155.03553897762185,
+        "z": 74.78514596794076,
+        "width": 28.71957365263085,
+        "depth": 13.10284749024026,
+        "height": 23.535949474383614,
+        "heading": 1.5707963267948966,
+        "seed": 1057562115,
+        "kind": "slab"
       }
     ],
     "stations": [
@@ -466,7 +486,8 @@
         "rings": 5,
         "rough": 0.2,
         "rocky": true,
-        "snow": true
+        "snow": true,
+        "kind": "mountain"
       },
       {
         "x": 81.7461776312507,
@@ -478,7 +499,8 @@
         "rings": 5,
         "rough": 0.2,
         "rocky": true,
-        "snow": true
+        "snow": true,
+        "kind": "mountain"
       },
       {
         "x": -97.13249092347894,
@@ -490,7 +512,8 @@
         "rings": 3,
         "rough": 0.14,
         "rocky": false,
-        "snow": false
+        "snow": false,
+        "kind": "mountain"
       },
       {
         "x": 95.87723930310754,
@@ -502,7 +525,8 @@
         "rings": 3,
         "rough": 0.14,
         "rocky": false,
-        "snow": false
+        "snow": false,
+        "kind": "mountain"
       },
       {
         "x": 74.61173712582263,
@@ -514,7 +538,8 @@
         "rings": 3,
         "rough": 0.14,
         "rocky": false,
-        "snow": false
+        "snow": false,
+        "kind": "mountain"
       },
       {
         "x": -21.608941955921665,
@@ -526,7 +551,8 @@
         "rings": 3,
         "rough": 0.14,
         "rocky": false,
-        "snow": false
+        "snow": false,
+        "kind": "mountain"
       },
       {
         "x": 24.68106067362089,
@@ -538,7 +564,8 @@
         "rings": 3,
         "rough": 0.14,
         "rocky": false,
-        "snow": false
+        "snow": false,
+        "kind": "mountain"
       },
       {
         "x": -44.34901358258344,
@@ -550,7 +577,8 @@
         "rings": 5,
         "rough": 0.2,
         "rocky": true,
-        "snow": true
+        "snow": true,
+        "kind": "mountain"
       },
       {
         "x": -22.457987385707042,
@@ -562,7 +590,8 @@
         "rings": 3,
         "rough": 0.14,
         "rocky": false,
-        "snow": false
+        "snow": false,
+        "kind": "mountain"
       },
       {
         "x": 33.30532684862362,
@@ -574,7 +603,8 @@
         "rings": 5,
         "rough": 0.2,
         "rocky": true,
-        "snow": true
+        "snow": true,
+        "kind": "mountain"
       },
       {
         "x": 111.97883875209351,
@@ -586,7 +616,8 @@
         "rings": 5,
         "rough": 0.2,
         "rocky": true,
-        "snow": true
+        "snow": true,
+        "kind": "mountain"
       },
       {
         "x": 153.88713843637973,
@@ -598,7 +629,8 @@
         "rings": 5,
         "rough": 0.2,
         "rocky": true,
-        "snow": true
+        "snow": true,
+        "kind": "mountain"
       }
     ],
     "trees": [
@@ -1185,6 +1217,163 @@
         "seed": 1060421068,
         "conifer": null,
         "kind": "poplar"
+      },
+      {
+        "x": 156.0922126426755,
+        "z": 96.29809937184943,
+        "height": 11.0,
+        "seed": 1065478319,
+        "conifer": null,
+        "kind": "pine"
+      }
+    ],
+    "lakes": [
+      {
+        "x": 151.50529342208418,
+        "z": 46.32567453171394,
+        "radius": 8.0,
+        "beach": 2.5,
+        "seed": 1042277766,
+        "sides": 28,
+        "size": "pond"
+      },
+      {
+        "x": 142.93960633923294,
+        "z": 44.93390940818503,
+        "radius": 8.0,
+        "beach": 2.5,
+        "seed": 904481603,
+        "sides": 28,
+        "size": "pond"
+      },
+      {
+        "x": 150.8046644529712,
+        "z": 33.86099560339901,
+        "radius": 8.0,
+        "beach": 2.5,
+        "seed": 432112442,
+        "sides": 28,
+        "size": "pond"
+      },
+      {
+        "x": 169.240561695753,
+        "z": -92.20365063006706,
+        "radius": 14.0,
+        "beach": 2.5,
+        "seed": 871400805,
+        "sides": 28,
+        "size": "lake_s"
+      },
+      {
+        "x": -151.04791689270945,
+        "z": -153.7952265298586,
+        "radius": 38.0,
+        "beach": 5.32,
+        "seed": 161846126,
+        "sides": 28,
+        "size": "lake_l"
+      }
+    ],
+    "meadows": [
+      {
+        "x": -144.43586826389082,
+        "z": 146.3314264566804,
+        "radius": 48.0,
+        "seed": 884641447,
+        "tone": 3,
+        "tufts": 21,
+        "sides": 11,
+        "size": "meadow_xl"
+      },
+      {
+        "x": -107.22331059272273,
+        "z": -59.85561872087138,
+        "radius": 48.0,
+        "seed": 394143380,
+        "tone": 3,
+        "tufts": 21,
+        "sides": 11,
+        "size": "meadow_xl"
+      },
+      {
+        "x": -111.56483775225058,
+        "z": 0.6001744721087263,
+        "radius": 48.0,
+        "seed": 1044671326,
+        "tone": 3,
+        "tufts": 21,
+        "sides": 11,
+        "size": "meadow_xl"
+      },
+      {
+        "x": -100.1724061575174,
+        "z": 20.020224417051033,
+        "radius": 48.0,
+        "seed": 316296518,
+        "tone": 3,
+        "tufts": 21,
+        "sides": 11,
+        "size": "meadow_xl"
+      },
+      {
+        "x": -119.57268793721687,
+        "z": 60.29094644604303,
+        "radius": 48.0,
+        "seed": 596254496,
+        "tone": 3,
+        "tufts": 21,
+        "sides": 11,
+        "size": "meadow_xl"
+      },
+      {
+        "x": -106.80605491575443,
+        "z": 103.47060048473664,
+        "radius": 48.0,
+        "seed": 22201320,
+        "tone": 3,
+        "tufts": 21,
+        "sides": 11,
+        "size": "meadow_xl"
+      },
+      {
+        "x": -70.23672167245934,
+        "z": 89.4583240785011,
+        "radius": 48.0,
+        "seed": 173776019,
+        "tone": 3,
+        "tufts": 21,
+        "sides": 11,
+        "size": "meadow_xl"
+      },
+      {
+        "x": -8.246084366089349,
+        "z": 142.5526451777101,
+        "radius": 48.0,
+        "seed": 933678317,
+        "tone": 3,
+        "tufts": 21,
+        "sides": 11,
+        "size": "meadow_xl"
+      },
+      {
+        "x": 33.90607883294166,
+        "z": 142.6343763668184,
+        "radius": 48.0,
+        "seed": 137504326,
+        "tone": 3,
+        "tufts": 21,
+        "sides": 11,
+        "size": "meadow_xl"
+      },
+      {
+        "x": 76.01993366010709,
+        "z": 145.930399325842,
+        "radius": 48.0,
+        "seed": 717358602,
+        "tone": 3,
+        "tufts": 21,
+        "sides": 11,
+        "size": "meadow_xl"
       }
     ]
   }
